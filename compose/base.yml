@@ -318,7 +318,8 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.adminer.rule=Host(`${ADMINER_HOSTNAME:-pg.${APP_HOSTNAME}}`)"
-      - "traefik.http.routers.adminer.service=adminer@docker"
+      - "traefik.http.routers.adminer.entrypoints=web"
+      - "traefik.http.routers.adminer.service=adminer"
       - "traefik.http.services.adminer.loadbalancer.server.port=8080"
       - "traefik.docker.network=devpush_default"
     healthcheck:
