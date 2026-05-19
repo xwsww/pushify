@@ -13,6 +13,7 @@ from config import get_settings
 from db import AsyncSessionLocal
 from models import Storage, StorageDatabaseUser, StorageProject, utc_now
 from services import mariadb as mariadb_service
+from services import postgres as postgres_service
 from services import storage_backup as storage_backup_service
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,68 @@ async def provision_storage(ctx, resource_id: str):
                     }
                 )
                 storage.config = config
+            elif storage.type == "postgres":
+                db_users = (
+                    await db.execute(
+                        select(StorageDatabaseUser).where(
+                            StorageDatabaseUser.storage_id == storage.id
+                        )
+                    )
+                ).scalars().all()
+                db_user_payloads = [
+                    {
+                        "username": db_user.username,
+                        "password": db_user.password,
+                        "scope": db_user.scope,
+                    }
+                    for db_user in db_users
+                ]
+                await asyncio.to_thread(
+                    _ensure_postgres_storage,
+                    settings,
+                    storage.name,
+                    storage.id,
+                    storage.config if isinstance(storage.config, dict) else {},
+                    db_user_payloads,
+                )
+                database = postgres_service.get_storage_database_name(storage)
+                admin_user = next((user for user in db_users if user.scope == "admin"), None)
+                if admin_user is None:
+                    admin_user = StorageDatabaseUser(
+                        storage_id=storage.id,
+                        username=postgres_service.get_storage_username(storage),
+                        scope="admin",
+                        created_by_user_id=storage.created_by_user_id,
+                    )
+                    admin_user.password = postgres_service.generate_password()
+                    db.add(admin_user)
+                    db_users.append(admin_user)
+                    await db.flush()
+                    db_user_payloads = [
+                        {
+                            "username": db_user.username,
+                            "password": db_user.password,
+                            "scope": db_user.scope,
+                        }
+                        for db_user in db_users
+                    ]
+                    await asyncio.to_thread(
+                        _ensure_postgres_storage,
+                        settings,
+                        storage.name,
+                        storage.id,
+                        storage.config if isinstance(storage.config, dict) else {},
+                        db_user_payloads,
+                    )
+                config = storage.config.copy() if isinstance(storage.config, dict) else {}
+                config.update(
+                    {
+                        "engine": "postgres",
+                        "database": database,
+                        "username": admin_user.username,
+                    }
+                )
+                storage.config = config
             elif storage.type == "volume":
                 await asyncio.to_thread(_ensure_volume_path, settings, storage)
             else:
@@ -145,6 +208,22 @@ async def deprovision_storage(ctx, resource_id: str):
                 ).scalars().all()
                 await asyncio.to_thread(
                     _remove_mariadb_storage,
+                    settings,
+                    storage.name,
+                    storage.id,
+                    storage.config if isinstance(storage.config, dict) else {},
+                    [db_user.username for db_user in db_users],
+                )
+            elif storage.type == "postgres":
+                db_users = (
+                    await db.execute(
+                        select(StorageDatabaseUser).where(
+                            StorageDatabaseUser.storage_id == storage.id
+                        )
+                    )
+                ).scalars().all()
+                await asyncio.to_thread(
+                    _remove_postgres_storage,
                     settings,
                     storage.name,
                     storage.id,
@@ -214,6 +293,28 @@ async def reset_storage(ctx, resource_id: str):
                 ).scalars().all()
                 await asyncio.to_thread(
                     _reset_mariadb_storage,
+                    settings,
+                    storage.name,
+                    storage.id,
+                    storage.config if isinstance(storage.config, dict) else {},
+                    [
+                        {
+                            "username": db_user.username,
+                            "password": db_user.password,
+                        }
+                        for db_user in db_users
+                    ],
+                )
+            elif storage.type == "postgres":
+                db_users = (
+                    await db.execute(
+                        select(StorageDatabaseUser).where(
+                            StorageDatabaseUser.storage_id == storage.id
+                        )
+                    )
+                ).scalars().all()
+                await asyncio.to_thread(
+                    _reset_postgres_storage,
                     settings,
                     storage.name,
                     storage.id,
@@ -324,6 +425,62 @@ def _remove_mariadb_storage(
         mariadb_service.revoke_user_access(settings, username)
 
 
+def _build_postgres_storage_stub(storage_name: str, storage_id: str, config: dict) -> Storage:
+    storage = Storage(name=storage_name, type="postgres", team_id="", config=config or {})
+    storage.id = storage_id
+    return storage
+
+
+def _ensure_postgres_storage(
+    settings,
+    storage_name: str,
+    storage_id: str,
+    config: dict,
+    db_users: list[dict[str, str]],
+) -> None:
+    postgres_service.wait_until_ready(settings)
+    storage = _build_postgres_storage_stub(storage_name, storage_id, config)
+    database = postgres_service.ensure_database(settings, storage)
+    for db_user in db_users:
+        postgres_service.ensure_user_access(
+            settings,
+            database=database,
+            username=db_user["username"],
+            password=db_user["password"],
+        )
+
+
+def _remove_postgres_storage(
+    settings, storage_name: str, storage_id: str, config: dict, usernames: list[str]
+) -> None:
+    postgres_service.wait_until_ready(settings)
+    storage = _build_postgres_storage_stub(storage_name, storage_id, config)
+    postgres_service.drop_database(settings, storage)
+    for username in usernames:
+        postgres_service.revoke_user_access(settings, username)
+
+
+def _reset_postgres_storage(
+    settings,
+    storage_name: str,
+    storage_id: str,
+    config: dict,
+    db_users: list[dict[str, str]],
+) -> None:
+    postgres_service.wait_until_ready(settings)
+    storage = _build_postgres_storage_stub(storage_name, storage_id, config)
+    database = postgres_service.get_storage_database_name(storage)
+    postgres_service.drop_database(settings, storage)
+    postgres_service.ensure_database(settings, storage)
+    for db_user in db_users:
+        postgres_service.ensure_user_access(
+            settings,
+            database=database,
+            username=db_user["username"],
+            password=db_user["password"],
+        )
+
+
 def _remove_volume_path(settings, storage: Storage) -> None:
     base_dir = (
         Path(settings.data_dir) / "storage" / storage.team_id / "volume" / storage.name
@@ -420,6 +577,18 @@ async def backup_storage(ctx, storage_id: str):
                 storage.updated_at = utc_now()
                 await db.commit()
                 return
+        elif storage.type == "postgres":
+            admin_user = await postgres_service.get_storage_admin_user(db, storage.id)
+            if admin_user is None:
+                storage_backup_service.record_backup_result(
+                    storage,
+                    status="failed",
+                    error="PostgreSQL admin user not found",
+                )
+                attributes.flag_modified(storage, "config")
+                storage.updated_at = utc_now()
+                await db.commit()
+                return
 
         try:
             await asyncio.to_thread(
@@ -451,7 +620,7 @@ async def storage_backup_scheduler(ctx):
         result = await db.execute(
             select(Storage).where(
                 Storage.status == "active",
-                Storage.type.in_(["database", "mariadb"]),
+                Storage.type.in_(["database", "mariadb", "postgres"]),
             )
         )
         storages = result.scalars().all()

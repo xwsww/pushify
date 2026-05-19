@@ -42,6 +42,7 @@ set_compose_base
 
 # Backfill newly required generated secrets for upgraded installs.
 ensure_mariadb_env "$ENV_FILE"
+ensure_postgres_storage_env "$ENV_FILE"
 
 # Validate environment variables
 validate_env "$ENV_FILE"

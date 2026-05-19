@@ -12,7 +12,7 @@ RUN addgroup --gid "${APP_GID}" appgroup \
     && adduser --uid "${APP_UID}" --gid "${APP_GID}" --system --home /app appuser
 
 # System dependencies
-RUN apt-get update && apt-get install -y bash curl git jq util-linux procps mariadb-client && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y bash curl git jq util-linux procps mariadb-client postgresql-client && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/

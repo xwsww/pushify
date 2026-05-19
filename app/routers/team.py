@@ -63,6 +63,7 @@ from forms.storage import (
     StorageBackupSettingsForm,
 )
 from services import mariadb as mariadb_service
+from services import postgres as postgres_service
 from services import storage_backup as storage_backup_service
 
 logger = logging.getLogger(__name__)
@@ -359,6 +360,13 @@ async def team_storage(
                     storage,
                     created_by_user_id=current_user.id,
                 )
+            elif storage.type == "postgres":
+                postgres_admin_user = await postgres_service.ensure_storage_admin_user(
+                    db,
+                    settings,
+                    storage,
+                    created_by_user_id=current_user.id,
+                )
             await db.commit()
             try:
                 await queue.enqueue_job("provision_storage", storage.id)
@@ -381,6 +389,28 @@ async def team_storage(
                         storage=storage,
                         username=mariadb_admin_user.username,
                         password=mariadb_admin_user.password,
+                    )["database_url"],
+                )
+                return RedirectResponseX(
+                    request.url_for(
+                        "team_storage_settings",
+                        team_slug=team.slug,
+                        storage_name=storage.name,
+                    ),
+                    status_code=200,
+                    request=request,
+                )
+            elif storage.type == "postgres":
+                set_storage_password_reveal(
+                    request,
+                    storage.id,
+                    username=postgres_admin_user.username,
+                    password=postgres_admin_user.password,
+                    database_url=postgres_service.build_connection_context(
+                        settings,
+                        storage=storage,
+                        username=postgres_admin_user.username,
+                        password=postgres_admin_user.password,
                     )["database_url"],
                 )
                 return RedirectResponseX(
@@ -530,6 +560,12 @@ async def team_storage_settings(
     mariadb_password_reveal: dict[str, str] | None = None
     mariadb_open_url: str | None = None
     mariadb_rotate_user_form: Any = None
+    postgres_admin_user: StorageDatabaseUser | None = None
+    postgres_connection: dict[str, Any] | None = None
+    postgres_database_name: str | None = None
+    postgres_usage_dsn: str | None = None
+    postgres_password_reveal: dict[str, str] | None = None
+    postgres_rotate_user_form: Any = None
 
     if storage.type == "mariadb":
         mariadb_password_reveal = pop_storage_password_reveal(request, storage.id)
@@ -578,6 +614,45 @@ async def team_storage_settings(
             )
             mariadb_usage_dsn = mariadb_connection["database_url_display"]
 
+    if storage.type == "postgres":
+        postgres_password_reveal = pop_storage_password_reveal(request, storage.id)
+        if request.method == "GET" and should_retry_pending_mariadb_provision(storage):
+            try:
+                storage.error = None
+                await queue.enqueue_job("provision_storage", storage.id)
+                storage.updated_at = utc_now()
+                await db.commit()
+            except Exception as exc:
+                logger.error(
+                    "Failed to retry provisioning for PostgreSQL storage %s: %s",
+                    storage.id,
+                    exc,
+                )
+                await db.rollback()
+        postgres_database_name = postgres_service.get_storage_database_name(storage)
+        postgres_admin_user = await postgres_service.get_storage_admin_user(db, storage.id)
+        if (
+            postgres_admin_user is None
+            or postgres_admin_user.username
+            != postgres_service.get_storage_username(storage)
+        ):
+            postgres_admin_user = await postgres_service.ensure_storage_admin_user(
+                db,
+                settings,
+                storage,
+                created_by_user_id=storage.created_by_user_id,
+            )
+            await db.commit()
+        postgres_rotate_user_form = await StorageDbUserRotateForm.from_formdata(request)
+        if postgres_admin_user:
+            postgres_connection = postgres_service.build_connection_context(
+                settings,
+                storage=storage,
+                username=postgres_admin_user.username,
+                password=postgres_admin_user.password,
+            )
+            postgres_usage_dsn = postgres_connection["database_url_display"]
+
     if request.method == "POST" and fragment == "danger":
         form_data = await request.form()
         if not get_access(role, "admin"):
@@ -587,7 +662,7 @@ async def team_storage_settings(
                 "warning",
             )
         elif "reset_storage" in form_data and await reset_form.validate_on_submit():
-            if storage.type in ("database", "mariadb", "volume"):
+            if storage.type in ("database", "mariadb", "postgres", "volume"):
                 storage.status = "resetting"
                 storage.error = None
                 await db.commit()
@@ -607,7 +682,7 @@ async def team_storage_settings(
         elif "delete_storage" in form_data and await delete_form.validate_on_submit():
             storage.status = "deleted"
             await db.commit()
-            if storage.type in ("database", "mariadb", "volume"):
+            if storage.type in ("database", "mariadb", "postgres", "volume"):
                 try:
                     await queue.enqueue_job("deprovision_storage", storage.id)
                 except Exception as exc:
@@ -969,8 +1044,90 @@ async def team_storage_settings(
             status_code=303,
         )
 
+    if request.method == "POST" and fragment == "postgres" and storage.type == "postgres":
+        if not is_admin and not is_storage_creator:
+            flash(
+                request,
+                _("You don't have permission to manage PostgreSQL access."),
+                "warning",
+            )
+        else:
+            form_data = await request.form()
+            if "rotate_db_user" in form_data and await postgres_rotate_user_form.validate_on_submit():
+                db_user = await postgres_service.get_storage_admin_user(db, storage.id)
+                if not db_user or str(db_user.id) != str(postgres_rotate_user_form.user_id.data):
+                    flash(request, _("Database user not found."), "error")
+                else:
+                    await postgres_service.rotate_user_password(
+                        db, settings, storage, db_user
+                    )
+                    await db.commit()
+                    postgres_admin_user = db_user
+                    postgres_connection = postgres_service.build_connection_context(
+                        settings,
+                        storage=storage,
+                        username=db_user.username,
+                        password=db_user.password,
+                    )
+                    postgres_password_reveal = {
+                        "database_url": postgres_connection["database_url"],
+                        "password": db_user.password,
+                        "username": db_user.username,
+                    }
+                    flash(request, _("Password rotated."), "success")
+
+        postgres_admin_user = await postgres_service.get_storage_admin_user(db, storage.id)
+        postgres_rotate_user_form = await StorageDbUserRotateForm.from_formdata(request)
+        postgres_database_name = postgres_service.get_storage_database_name(storage)
+        if postgres_admin_user:
+            postgres_connection = postgres_service.build_connection_context(
+                settings,
+                storage=storage,
+                username=postgres_admin_user.username,
+                password=postgres_admin_user.password,
+            )
+            postgres_usage_dsn = postgres_connection["database_url_display"]
+        else:
+            postgres_connection = None
+            postgres_usage_dsn = None
+        if request.headers.get("HX-Request"):
+            return TemplateResponse(
+                request=request,
+                name="team/partials/_storage-settings-postgres.html",
+                context={
+                    "current_user": current_user,
+                    "team": team,
+                    "role": role,
+                    "storage": storage,
+                    "postgres_admin_user": postgres_admin_user,
+                    "postgres_connection": postgres_connection,
+                    "postgres_database_name": postgres_database_name,
+                    "postgres_usage_dsn": postgres_usage_dsn,
+                    "postgres_password_reveal": postgres_password_reveal,
+                    "postgres_rotate_user_form": postgres_rotate_user_form,
+                },
+            )
+        if postgres_password_reveal and postgres_admin_user:
+            set_storage_password_reveal(
+                request,
+                storage.id,
+                username=postgres_admin_user.username,
+                password=postgres_password_reveal["password"],
+                database_url=postgres_password_reveal["database_url"],
+            )
+        return RedirectResponse(
+            url=str(
+                request.url_for(
+                    "team_storage_settings",
+                    team_slug=team.slug,
+                    storage_name=storage.name,
+                )
+            ),
+            status_code=303,
+        )
+
     backup_context: dict[str, Any] = {}
-    if storage.type in ("database", "mariadb") and is_admin:
+    if storage.type in ("database", "mariadb", "postgres") and is_admin:
         backup_ctx = await _storage_backup_context(request, settings, storage)
         backup_form = backup_ctx["backup_form"]
 
@@ -1045,6 +1202,12 @@ async def team_storage_settings(
             "mariadb_password_reveal": mariadb_password_reveal,
             "mariadb_open_url": mariadb_open_url,
             "mariadb_rotate_user_form": mariadb_rotate_user_form,
+            "postgres_admin_user": postgres_admin_user,
+            "postgres_connection": postgres_connection,
+            "postgres_database_name": postgres_database_name,
+            "postgres_usage_dsn": postgres_usage_dsn,
+            "postgres_password_reveal": postgres_password_reveal,
+            "postgres_rotate_user_form": postgres_rotate_user_form,
             "latest_teams": latest_teams,
             **backup_context,
         },

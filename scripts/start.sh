@@ -104,6 +104,7 @@ write_registry_files
 
 # Backfill newly required generated secrets for upgraded installs.
 ensure_mariadb_env "$ENV_FILE"
+ensure_postgres_storage_env "$ENV_FILE"
 ensure_phpmyadmin_env "$ENV_FILE"
 ensure_deployment_resource_env "$ENV_FILE"
 sync_deployment_resources_for_host "$ENV_FILE"

@@ -699,7 +699,7 @@ class Storage(Base):
     )
     name: Mapped[str] = mapped_column(String(100), index=True)
     type: Mapped[str] = mapped_column(
-        SQLAEnum("database", "mariadb", "volume", "kv", "queue", name="storage_type"),
+        SQLAEnum("database", "mariadb", "postgres", "volume", "kv", "queue", name="storage_type"),
         nullable=False,
     )
     status: Mapped[str] = mapped_column(
@@ -759,6 +759,8 @@ class Storage(Base):
                 return "sky"
             case "mariadb":
                 return "orange"
+            case "postgres":
+                return "blue"
             case "volume":
                 return "amber"
             case "kv":
@@ -775,8 +777,12 @@ class Storage(Base):
         return self.type == "mariadb"
 
     @property
+    def is_postgres(self) -> bool:
+        return self.type == "postgres"
+
+    @property
     def is_database(self) -> bool:
-        return self.type in {"database", "mariadb"}
+        return self.type in {"database", "mariadb", "postgres"}
 
 
 class StorageProject(Base):

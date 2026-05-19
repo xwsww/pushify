@@ -98,6 +98,7 @@ fi
 
 # Backfill newly required generated secrets for upgraded installs.
 ensure_mariadb_env "$ENV_FILE"
+ensure_postgres_storage_env "$ENV_FILE"
 ensure_phpmyadmin_env "$ENV_FILE"
 prepare_shell_scripts "$APP_DIR"
 

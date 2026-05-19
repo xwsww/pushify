@@ -16,6 +16,7 @@ from models import Deployment, Alias, Project, User, Domain, Storage, StoragePro
 from utils.environment import get_environment_for_branch
 from config import Settings, get_settings
 from services import mariadb as mariadb_service
+from services import postgres as postgres_service
 from services.registry import RegistryService
 from services.traefik_security import (
     challenge_router,
@@ -242,6 +243,59 @@ class DeploymentService:
             if not generic_assigned:
                 generic_vars = {
                     "DB_ENGINE": "mariadb",
+                    "DB_HOST": connection["host"],
+                    "DB_PORT": str(connection["port"]),
+                    "DB_NAME": connection["database"],
+                    "DB_USER": connection["username"],
+                    "DB_PASSWORD": connection["password"],
+                    "DATABASE_URL": connection["database_url"],
+                }
+                for key, value in generic_vars.items():
+                    env_vars.setdefault(key, str(value))
+                generic_assigned = True
+
+        postgres_result = await db.execute(
+            select(StorageProject, Storage)
+            .join(Storage, StorageProject.storage_id == Storage.id)
+            .where(
+                StorageProject.project_id == deployment.project_id,
+                Storage.status.notin_(["pending", "deleted"]),
+                Storage.type == "postgres",
+            )
+        )
+        for association, storage in postgres_result.all():
+            env_ids = association.environment_ids or []
+            if env_ids and deployment.environment_id not in env_ids:
+                continue
+
+            db_user = await postgres_service.ensure_storage_admin_user(
+                db,
+                settings,
+                storage,
+                created_by_user_id=storage.created_by_user_id,
+            )
+            connection = postgres_service.build_connection_context(
+                settings,
+                storage=storage,
+                username=db_user.username,
+                password=db_user.password,
+            )
+            prefix = self._storage_env_prefix(storage.name)
+            prefixed_vars = {
+                f"{prefix}_DB_ENGINE": "postgres",
+                f"{prefix}_DB_HOST": connection["host"],
+                f"{prefix}_DB_PORT": str(connection["port"]),
+                f"{prefix}_DB_NAME": connection["database"],
+                f"{prefix}_DB_USER": connection["username"],
+                f"{prefix}_DB_PASSWORD": connection["password"],
+                f"{prefix}_DATABASE_URL": connection["database_url"],
+            }
+            for key, value in prefixed_vars.items():
+                env_vars.setdefault(key, str(value))
+
+            if not generic_assigned:
+                generic_vars = {
+                    "DB_ENGINE": "postgres",
                     "DB_HOST": connection["host"],
                     "DB_PORT": str(connection["port"]),
                     "DB_NAME": connection["database"],

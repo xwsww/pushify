@@ -13,6 +13,12 @@
     {{ _("MariaDB") }}
   </div>
 {% endset %}
+{% set postgres_label %}
+  <div class="flex items-center gap-x-2">
+    {{ icon_avatar(type="postgres", size="xs") }}
+    {{ _("PostgreSQL") }}
+  </div>
+{% endset %}
 {% set volume_label %}
   <div class="flex items-center gap-x-2">
     {{ icon_avatar(type="volume", size="xs") }}
@@ -51,6 +57,7 @@
       items=[
         {"label": database_label, "value": "database"},
         {"label": mariadb_label, "value": "mariadb"},
+        {"label": postgres_label, "value": "postgres"},
         {"label": volume_label, "value": "volume"},
       ],
     ) }}

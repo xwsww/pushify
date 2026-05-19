@@ -211,6 +211,30 @@ ensure_mariadb_env() {
   printf "  ${DIM}${CHILD_MARK} Added generated MARIADB_ROOT_PASSWORD to %s${NC}\n" "$env_file"
 }
 
+# Ensure generated PostgreSQL storage credentials exist for upgraded installs.
+ensure_postgres_storage_env() {
+  local env_file="${1:-$ENV_FILE}"
+  [[ -f "$env_file" ]] || return 0
+
+  local postgres_storage_password
+  postgres_storage_password="$(read_env_value "$env_file" POSTGRES_STORAGE_PASSWORD)"
+  if [[ -n "$postgres_storage_password" ]]; then
+    return 0
+  fi
+
+  postgres_storage_password="$(openssl rand -base64 24 | tr -d '\n')"
+  printf '\nPOSTGRES_STORAGE_PASSWORD="%s"\n' "$postgres_storage_password" >>"$env_file"
+  chmod 0600 "$env_file" >/dev/null 2>&1 || true
+
+  if [[ "$ENVIRONMENT" == "production" ]]; then
+    local service_user
+    service_user="$(default_service_user)"
+    chown "$service_user:$service_user" "$env_file" >/dev/null 2>&1 || true
+  fi
+
+  printf "  ${DIM}${CHILD_MARK} Added generated POSTGRES_STORAGE_PASSWORD to %s${NC}\n" "$env_file"
+}
+
 # Read the optional GitHub repo token from env or .env.
 github_repo_token() {
   if [[ -n "${DEVPUSH_GITHUB_REPO_TOKEN:-}" ]]; then
@@ -646,7 +670,7 @@ git_sync_fetch_head() {
 
 # Validation constants
 VALID_CERT_CHALLENGE_PROVIDERS="default|cloudflare|route53|gcloud|digitalocean|azure"
-VALID_COMPONENTS="app|worker-jobs|worker-monitor|alloy|traefik|loki|redis|docker-proxy|pgsql|mariadb|phpmyadmin"
+VALID_COMPONENTS="app|worker-jobs|worker-monitor|alloy|traefik|loki|redis|docker-proxy|pgsql|mariadb|postgres-storage|phpmyadmin"
 
 # Resolve certificate challenge provider from env
 get_cert_challenge_provider() {

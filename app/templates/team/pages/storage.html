@@ -91,6 +91,11 @@
             <input type="radio" name="storage_type" value="mariadb" class="hidden" {% if storage_type == 'mariadb' %}checked{% endif %}/>
           </label>
           <label class="btn-sm-outline has-checked:bg-accent has-checked:text-accent-foreground has-checked:dark:bg-accent/50">
+            {{ icon_avatar(type="postgres", size="xs") }}
+            {{ _("PostgreSQL") }}
+            <input type="radio" name="storage_type" value="postgres" class="hidden" {% if storage_type == 'postgres' %}checked{% endif %}/>
+          </label>
+          <label class="btn-sm-outline has-checked:bg-accent has-checked:text-accent-foreground has-checked:dark:bg-accent/50">
             {{ icon_avatar(type="volume", size="xs") }}
             {{ _("Volumes") }}
             <input type="radio" name="storage_type" value="volume" class="hidden" {% if storage_type == 'volume' %}checked{% endif %}/>

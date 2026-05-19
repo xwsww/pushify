@@ -114,6 +114,7 @@ fi
 if [[ -f "$ENV_FILE" ]]; then
   # Backfill newly required generated secrets for upgraded installs.
   ensure_mariadb_env "$ENV_FILE"
+  ensure_postgres_storage_env "$ENV_FILE"
 fi
 
 cd "$APP_DIR" || { err "App dir not found: $APP_DIR"; exit 1; }

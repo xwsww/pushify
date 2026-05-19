@@ -16,6 +16,7 @@ from typing import Any
 from config import Settings
 from models import Storage, StorageDatabaseUser, utc_now
 from services import mariadb as mariadb_service
+from services import postgres as postgres_service
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +152,7 @@ def should_run_backup(storage: Storage, now: datetime | None = None) -> bool:
     cfg = get_backup_config(storage)
     if not cfg["enabled"] or storage.status != "active":
         return False
-    if storage.type not in ("database", "mariadb"):
+    if storage.type not in ("database", "mariadb", "postgres"):
         return False
 
     now = now or datetime.now(timezone.utc)
@@ -207,13 +208,17 @@ def list_backups(settings: Settings, storage: Storage) -> list[BackupEntry]:
             )
         except ValueError:
             created = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        if ext == "sql":
+            storage_type = "mariadb" if "mariadb" in path.name.lower() else "postgres"
+        else:
+            storage_type = "sqlite"
         entries.append(
             BackupEntry(
                 id=path.name,
                 filename=path.name,
                 size_bytes=path.stat().st_size,
                 format="gzip",
-                storage_type="mariadb" if ext == "sql" else "sqlite",
+                storage_type=storage_type,
                 created_at=created,
             )
         )
@@ -242,7 +247,12 @@ def resolve_backup_path(
 def _new_backup_filename(storage: Storage) -> tuple[str, str]:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     suffix = secrets.token_hex(4)
-    ext = "sql" if storage.type == "mariadb" else "sqlite"
+    if storage.type == "mariadb":
+        ext = "sql"
+    elif storage.type == "postgres":
+        ext = "sql"
+    else:
+        ext = "sqlite"
     filename = f"{stamp}_{suffix}.{ext}.gz"
     return filename, filename
 
@@ -340,13 +350,45 @@ def prune_backups(settings: Settings, storage: Storage, max_backups: int) -> Non
             logger.warning("Failed to remove old backup %s: %s", path, exc)
 
 
+def _backup_postgres(
+    settings: Settings,
+    storage: Storage,
+    admin_user: StorageDatabaseUser,
+    out_path: Path,
+) -> None:
+    database = postgres_service.get_storage_database_name(storage)
+    host = postgres_service.get_postgres_host(settings)
+    port = postgres_service.get_postgres_port(settings)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    dump_cmd = [
+        "pg_dump",
+        f"--host={host}",
+        f"--port={port}",
+        f"--username={admin_user.username}",
+        "--format=custom",
+        "--verbose",
+        database,
+    ]
+    env = os.environ.copy()
+    env["PGPASSWORD"] = admin_user.password
+    with gzip.open(out_path, "wb", compresslevel=9) as gz:
+        subprocess.run(
+            dump_cmd,
+            env=env,
+            stdout=gz,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+
+
 def create_backup(
     settings: Settings,
     storage: Storage,
     admin_user: StorageDatabaseUser | None = None,
 ) -> BackupEntry:
-    if storage.type not in ("database", "mariadb"):
-        raise ValueError("Backups are only supported for SQLite and MariaDB storage")
+    if storage.type not in ("database", "mariadb", "postgres"):
+        raise ValueError("Backups are only supported for SQLite, MariaDB and PostgreSQL storage")
     if storage.status != "active":
         raise ValueError("Storage must be active")
 
@@ -355,10 +397,14 @@ def create_backup(
 
     if storage.type == "database":
         _backup_sqlite(settings, storage, out_path)
-    else:
+    elif storage.type == "mariadb":
         if admin_user is None:
             raise ValueError("MariaDB admin user is required")
         _backup_mariadb(settings, storage, admin_user, out_path)
+    elif storage.type == "postgres":
+        if admin_user is None:
+            raise ValueError("PostgreSQL admin user is required")
+        _backup_postgres(settings, storage, admin_user, out_path)
 
     _apply_permissions(settings, out_path.parent)
 

@@ -40,6 +40,12 @@
               attrs={"tooltip": _('Copy connection string')},
               class="btn-sm-icon-ghost"
             ) }}
+          {% elif storage.type == "postgres" %}
+            {{ copy(
+              value=storage.config.get("database_url_display", "postgresql://" ~ storage.config.get("username", storage.name) ~ "@postgres-storage:5432/" ~ storage.config.get("database", storage.name)),
+              attrs={"tooltip": _('Copy connection string')},
+              class="btn-sm-icon-ghost"
+            ) }}
           {% else %}
             {{ copy(
               value="/data/database/" ~ storage.name ~ "/db.sqlite",

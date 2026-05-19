@@ -47,6 +47,7 @@ class StorageCreateForm(StarletteForm):
         choices=[
             ("database", _("SQLite")),
             ("mariadb", _("MariaDB")),
+            ("postgres", _("PostgreSQL")),
             ("volume", _("Volume")),
         ],
     )
