@@ -309,11 +309,8 @@ services:
     depends_on:
       postgres-storage:
         condition: service_healthy
-      traefik:
-        condition: service_started
     networks:
       - default
-      - internal
     environment:
       ADMINER_DEFAULT_SERVER: postgres-storage
       ADMINER_DEFAULT_PORT: 5432
@@ -324,7 +321,6 @@ services:
       - "traefik.http.routers.adminer.entrypoints=web"
       - "traefik.http.routers.adminer.service=adminer"
       - "traefik.http.services.adminer.loadbalancer.server.port=8080"
-      - "traefik.docker.network=devpush_default"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/"]
       interval: 30s
