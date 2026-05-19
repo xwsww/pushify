@@ -27,17 +27,24 @@ services:
       - traefik.http.routers.phpmyadmin.middlewares=pushify-inflight-panel@file,pushify-ratelimit-panel@file,pushify-headers@file
 
   adminer:
+    networks:
+      - default
     labels:
+      - traefik.enable=true
+      - traefik.docker.network=devpush_default
       - traefik.http.routers.adminer-http.rule=Host(`${ADMINER_HOSTNAME:-pg.${APP_HOSTNAME}}`)
       - traefik.http.routers.adminer-http.entrypoints=web
       - traefik.http.routers.adminer-http.priority=6
       - traefik.http.routers.adminer-http.service=noop@internal
       - traefik.http.routers.adminer-http.middlewares=pushify-redirect-https@file
+      - traefik.http.routers.adminer.rule=Host(`${ADMINER_HOSTNAME:-pg.${APP_HOSTNAME}}`)
       - traefik.http.routers.adminer.entrypoints=websecure
       - traefik.http.routers.adminer.tls=true
       - traefik.http.routers.adminer.tls.certresolver=le
       - traefik.http.routers.adminer.priority=8
+      - traefik.http.routers.adminer.service=adminer
       - traefik.http.routers.adminer.middlewares=pushify-inflight-panel@file,pushify-ratelimit-panel@file,pushify-headers@file
+      - traefik.http.services.adminer.loadbalancer.server.port=8080
 
   traefik:
     ports:
