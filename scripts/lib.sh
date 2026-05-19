@@ -670,7 +670,7 @@ git_sync_fetch_head() {
 
 # Validation constants
 VALID_CERT_CHALLENGE_PROVIDERS="default|cloudflare|route53|gcloud|digitalocean|azure"
-VALID_COMPONENTS="app|worker-jobs|worker-monitor|alloy|traefik|loki|redis|docker-proxy|pgsql|mariadb|postgres-storage|phpmyadmin"
+VALID_COMPONENTS="app|worker-jobs|worker-monitor|alloy|traefik|loki|redis|docker-proxy|pgsql|mariadb|postgres-storage|phpmyadmin|adminer"
 
 # Resolve certificate challenge provider from env
 get_cert_challenge_provider() {

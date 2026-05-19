@@ -82,6 +82,44 @@ def build_database_url_display(
     return f"postgresql://{quote(username, safe='')}@{host}:{port}/{quote(database, safe='')}"
 
 
+def build_adminer_url(settings: Settings, storage: Storage) -> str | None:
+    hostname = (settings.adminer_hostname or "").strip()
+    if not hostname and settings.app_hostname:
+        hostname = f"pg.{settings.app_hostname}"
+    if not hostname:
+        return None
+    database = quote(get_storage_database_name(storage), safe="")
+    return (
+        f"{settings.url_scheme}://{hostname}/"
+        f"?server={get_postgres_host(settings)}"
+        f"&port={get_postgres_port(settings)}"
+        f"&db={database}"
+    )
+
+
+def build_adminer_login_url(
+    settings: Settings,
+    *,
+    storage: Storage,
+    username: str,
+    password: str,
+) -> str | None:
+    hostname = (settings.adminer_hostname or "").strip()
+    if not hostname and settings.app_hostname:
+        hostname = f"pg.{settings.app_hostname}"
+    if not hostname:
+        return None
+    database = get_storage_database_name(storage)
+    return (
+        f"{settings.url_scheme}://{hostname}/"
+        f"?server={get_postgres_host(settings)}"
+        f"&port={get_postgres_port(settings)}"
+        f"&db={database}"
+        f"&username={quote(username, safe='')}"
+        f"&password={quote(password, safe='')}"
+    )
+
+
 def connect(
     settings: Settings,
     *,

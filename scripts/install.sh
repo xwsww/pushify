@@ -417,6 +417,7 @@ APP_HOSTNAME="${install_hostname}"
 DEPLOY_DOMAIN="${install_deploy_domain}"
 LE_EMAIL="${install_le_email}"
 PHPMYADMIN_HOSTNAME=db.${install_hostname}
+ADMINER_HOSTNAME=pg.${install_hostname}
 # default|cloudflare|route53|gcloud|digitalocean|azure
 CERT_CHALLENGE_PROVIDER=default
 # CF_DNS_API_TOKEN=

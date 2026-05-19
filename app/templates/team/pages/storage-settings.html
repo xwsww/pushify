@@ -25,7 +25,7 @@
 
   <div class="flex flex-row-reverse gap-x-6">
     <nav class="sticky top-[122px] min-w-64 h-full flex flex-col gap-y-1 max-lg:hidden">
-      {% if storage.type != "mariadb" %}
+      {% if storage.type not in ["mariadb", "postgres"] %}
         <a href="#usage" class="btn-sm-ghost justify-start">{{ _('Usage') }}</a>
       {% endif %}
       <a href="#general" class="btn-sm-ghost justify-start">{{ _('General') }}</a>
@@ -37,7 +37,7 @@
       {% elif storage.type == "postgres" %}
         <a href="#postgres" class="btn-sm-ghost justify-start">{{ _('PostgreSQL') }}</a>
       {% endif %}
-      {% if storage.type in ['database', 'mariadb'] and get_access(role, 'admin') %}
+      {% if storage.type in ['database', 'mariadb', 'postgres'] and get_access(role, 'admin') %}
         <a href="#backups" class="btn-sm-ghost justify-start">{{ _('Backups') }}</a>
       {% endif %}
       {% if get_access(role, "admin") %}
@@ -46,7 +46,7 @@
     </nav>
 
     <div class="space-y-6 w-full form">
-      {% if storage.type != "mariadb" %}
+      {% if storage.type not in ["mariadb", "postgres"] %}
         <section id="usage" class="alert">
           {% include "icons/info.svg" %}
           <h3>{{ _('Usage') }}</h3>
@@ -97,7 +97,7 @@
         </section>
       {% endif %}
 
-      {% if storage.type in ['database', 'mariadb'] and get_access(role, 'admin') %}
+      {% if storage.type in ['database', 'mariadb', 'postgres'] and get_access(role, 'admin') %}
         <section class="relative rounded-xl scroll-mt-[101px]" id="backups">
           {% include "team/partials/_storage-settings-backup.html" %}
         </section>

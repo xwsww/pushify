@@ -564,7 +564,9 @@ async def team_storage_settings(
     postgres_connection: dict[str, Any] | None = None
     postgres_database_name: str | None = None
     postgres_usage_dsn: str | None = None
+    adminer_url: str | None = None
     postgres_password_reveal: dict[str, str] | None = None
+    postgres_open_url: str | None = None
     postgres_rotate_user_form: Any = None
 
     if storage.type == "mariadb":
@@ -643,6 +645,7 @@ async def team_storage_settings(
                 created_by_user_id=storage.created_by_user_id,
             )
             await db.commit()
+        adminer_url = postgres_service.build_adminer_url(settings, storage)
         postgres_rotate_user_form = await StorageDbUserRotateForm.from_formdata(request)
         if postgres_admin_user:
             postgres_connection = postgres_service.build_connection_context(
@@ -652,6 +655,13 @@ async def team_storage_settings(
                 password=postgres_admin_user.password,
             )
             postgres_usage_dsn = postgres_connection["database_url_display"]
+            postgres_open_url = str(
+                request.url_for(
+                    "team_storage_adminer",
+                    team_slug=team.slug,
+                    storage_name=storage.name,
+                )
+            )
 
     if request.method == "POST" and fragment == "danger":
         form_data = await request.form()
@@ -1103,7 +1113,9 @@ async def team_storage_settings(
                     "postgres_connection": postgres_connection,
                     "postgres_database_name": postgres_database_name,
                     "postgres_usage_dsn": postgres_usage_dsn,
+                    "adminer_url": adminer_url,
                     "postgres_password_reveal": postgres_password_reveal,
+                    "postgres_open_url": postgres_open_url,
                     "postgres_rotate_user_form": postgres_rotate_user_form,
                 },
             )
@@ -1206,7 +1218,9 @@ async def team_storage_settings(
             "postgres_connection": postgres_connection,
             "postgres_database_name": postgres_database_name,
             "postgres_usage_dsn": postgres_usage_dsn,
+            "adminer_url": adminer_url,
             "postgres_password_reveal": postgres_password_reveal,
+            "postgres_open_url": postgres_open_url,
             "postgres_rotate_user_form": postgres_rotate_user_form,
             "latest_teams": latest_teams,
             **backup_context,
@@ -1282,6 +1296,48 @@ async def team_storage_phpmyadmin(
     )
     if not login_url:
         raise HTTPException(status_code=404, detail="phpMyAdmin is not configured")
+    return RedirectResponse(login_url, status_code=302)
+
+
+@router.get(
+    "/{team_slug}/storage/{storage_name}/adminer",
+    name="team_storage_adminer",
+)
+async def team_storage_adminer(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    role: str = Depends(get_role),
+    team_and_membership: tuple[Team, TeamMember] = Depends(get_team_by_slug),
+    storage: Storage = Depends(get_storage_by_name),
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    team, membership = team_and_membership
+    is_admin = get_access(role, "admin")
+    is_storage_creator = storage.created_by_user_id == current_user.id
+    if not is_admin and not is_storage_creator:
+        raise HTTPException(status_code=404, detail="Storage not found")
+    if storage.type != "postgres":
+        raise HTTPException(status_code=400, detail="Only available for PostgreSQL storages")
+
+    db_user = await postgres_service.get_storage_admin_user(db, storage.id)
+    if db_user is None or db_user.username != postgres_service.get_storage_username(storage):
+        db_user = await postgres_service.ensure_storage_admin_user(
+            db,
+            settings,
+            storage,
+            created_by_user_id=storage.created_by_user_id,
+        )
+        await db.commit()
+
+    login_url = postgres_service.build_adminer_login_url(
+        settings,
+        storage=storage,
+        username=db_user.username,
+        password=db_user.password,
+    )
+    if not login_url:
+        raise HTTPException(status_code=404, detail="Adminer is not configured")
     return RedirectResponse(login_url, status_code=302)
 
 

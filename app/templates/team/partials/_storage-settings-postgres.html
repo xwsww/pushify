@@ -91,6 +91,17 @@
     </div>
 
     <div class="flex items-start gap-x-4">
+      {% if postgres_open_url and adminer_url %}
+        <a href="{{ postgres_open_url }}" class="btn-outline" target="_blank" rel="noreferrer">
+          {% include "icons/external-link.svg" %}
+          {{ _('Open in Adminer') }}
+        </a>
+      {% else %}
+        <button type="button" class="btn-outline opacity-60 cursor-not-allowed" disabled>
+          {{ _('Adminer unavailable') }}
+        </button>
+      {% endif %}
+
       <form
         method="post"
         action="{{ url_for('team_storage_settings', team_slug=team.slug, storage_name=storage.name).include_query_params(fragment='postgres') }}"

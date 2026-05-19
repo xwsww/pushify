@@ -302,6 +302,32 @@ services:
       retries: 3
       start_period: 30s
 
+  adminer:
+    image: adminer:4.8.1
+    restart: always
+    depends_on:
+      postgres-storage:
+        condition: service_healthy
+    networks:
+      - default
+      - internal
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres-storage
+      ADMINER_DEFAULT_PORT: 5432
+      ADMINER_DEFAULT_TYPE: pgsql
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adminer.rule=Host(`${ADMINER_HOSTNAME:-pg.${APP_HOSTNAME}}`)"
+      - "traefik.http.routers.adminer.service=adminer@docker"
+      - "traefik.http.services.adminer.loadbalancer.server.port=8080"
+      - "traefik.docker.network=devpush_default"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   loki:
     profiles: ["optional"]
     image: grafana/loki:3.5.8

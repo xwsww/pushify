@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     mariadb_root_user: str = "root"
     mariadb_root_password: str = ""
     phpmyadmin_hostname: str = ""
+    adminer_hostname: str = ""
     postgres_storage_host: str = "postgres-storage"
     postgres_storage_port: int = 5432
     postgres_storage_user: str = "postgres"
