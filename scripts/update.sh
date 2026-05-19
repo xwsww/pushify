@@ -16,7 +16,7 @@ on_error_hook() {
 
 usage(){
   cat <<USG
-Usage: bash update.sh [--ref <tag>] [--all | --components <csv> | --full] [--no-migrate] [--no-telemetry] [--yes|-y] [--verbose]
+Usage: bash update.sh [--ref <tag>] [--all | --components <csv> | --full] [--no-migrate] [--no-security] [--no-telemetry] [--yes|-y] [--verbose]
 
 Update /pushify/ by Git tag; performs rollouts (blue-green rollouts or simple restarts).
 Run as: sudo bash scripts/update.sh (not sudo scripts/update.sh).
@@ -29,6 +29,7 @@ Run as: sudo bash scripts/update.sh (not sudo scripts/update.sh).
   --full            Full stack update (down whole stack, then up). Causes downtime
   --backup          Create a backup before applying the update (recommended)
   --no-migrate      Do not run DB migrations after app update
+  --no-security     Skip host security updates (sysctl, CrowdSec)
   --no-telemetry    Do not send telemetry
   --yes, -y         Non-interactive yes to prompts
   -v, --verbose     Enable verbose output for debugging
@@ -38,7 +39,7 @@ USG
 }
 
 # Parse CLI flags
-ref=""; comps=""; do_all=0; do_full=0; do_backup=0; migrate=1; yes=0; telemetry=1
+ref=""; comps=""; do_all=0; do_full=0; do_backup=0; migrate=1; security=1; yes=0; telemetry=1
 [[ "${NO_TELEMETRY:-0}" == "1" ]] && telemetry=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -59,6 +60,7 @@ while [[ $# -gt 0 ]]; do
     --full) do_full=1; shift ;;
     --backup) do_backup=1; shift ;;
     --no-migrate) migrate=0; shift ;;
+    --no-security) security=0; shift ;;
     --no-telemetry) telemetry=0; shift ;;
     --yes|-y) yes=1; shift ;;
     -v|--verbose) VERBOSE=1; shift ;;
@@ -152,6 +154,9 @@ if ((do_backup==1)); then
 fi
 if ((migrate==0)); then
   apply_args+=(--no-migrate)
+fi
+if ((security==0)); then
+  apply_args+=(--no-security)
 fi
 if ((telemetry==0)); then
   apply_args+=(--no-telemetry)

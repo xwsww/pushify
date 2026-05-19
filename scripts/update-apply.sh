@@ -20,7 +20,7 @@ on_error_hook() {
 
 usage(){
   cat <<USG
-Usage: update-apply.sh [--ref <tag>] [--all | --components <csv> | --full] [--no-migrate] [--no-telemetry] [--yes|-y] [--verbose]
+Usage: update-apply.sh [--ref <tag>] [--all | --components <csv> | --full] [--no-migrate] [--no-security] [--no-telemetry] [--yes|-y] [--verbose]
 
 Apply a fetched update: validate, pull images, rollout, migrate, and record version.
 
@@ -32,6 +32,7 @@ Apply a fetched update: validate, pull images, rollout, migrate, and record vers
   --full            Full stack update (down whole stack, then up). Causes downtime
   --backup          Create a backup before applying the update (recommended)
   --no-migrate      Do not run DB migrations after app update
+  --no-security     Skip host security updates (sysctl, CrowdSec)
   --no-telemetry    Do not send telemetry
   --yes, -y         Non-interactive yes to prompts
   -v, --verbose     Enable verbose output for debugging
@@ -41,7 +42,7 @@ USG
 }
 
 # Parse CLI flags
-ref=""; comps=""; do_all=0; do_full=0; do_backup=0; migrate=1; yes=0; skip_components=0; telemetry=1
+ref=""; comps=""; do_all=0; do_full=0; do_backup=0; migrate=1; security=1; yes=0; skip_components=0; telemetry=1
 [[ "${NO_TELEMETRY:-0}" == "1" ]] && telemetry=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,6 +63,7 @@ while [[ $# -gt 0 ]]; do
     --full) do_full=1; shift ;;
     --backup) do_backup=1; shift ;;
     --no-migrate) migrate=0; shift ;;
+    --no-security) security=0; shift ;;
     --no-telemetry) telemetry=0; shift ;;
     --yes|-y) yes=1; shift ;;
     -v|--verbose) VERBOSE=1; shift ;;
@@ -110,7 +112,7 @@ ensure_acme_json
 ensure_security_middlewares_file
 ensure_origin_shield_file
 ensure_traefik_log_dir
-if [[ -f "$APP_DIR/scripts/provision/host-security.sh" ]]; then
+if [[ -f "$APP_DIR/scripts/provision/host-security.sh" && "$security" == "1" ]]; then
   run_cmd "${CHILD_MARK} Ensuring host security (sysctl, CrowdSec)" \
     bash "$APP_DIR/scripts/provision/host-security.sh"
 fi
