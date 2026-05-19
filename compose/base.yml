@@ -308,6 +308,8 @@ services:
     depends_on:
       postgres-storage:
         condition: service_healthy
+      traefik:
+        condition: service_started
     networks:
       - default
       - internal
