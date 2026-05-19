@@ -442,7 +442,7 @@ async def get_storage_by_name(
         select(Storage).where(
             func.lower(Storage.name) == storage_name.lower(),
             Storage.team_id == team.id,
-            Storage.type.in_(["database", "mariadb", "volume"]),
+            Storage.type.in_(["database", "mariadb", "postgres", "volume"]),
             Storage.status != "deleted",
         )
     )
