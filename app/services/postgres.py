@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -97,6 +98,11 @@ def build_adminer_url(settings: Settings, storage: Storage) -> str | None:
     )
 
 
+def _b64url_encode(data: bytes) -> str:
+    """Base64 URL-safe encoding without padding."""
+    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+
 def build_adminer_login_url(
     settings: Settings,
     *,
@@ -104,19 +110,48 @@ def build_adminer_login_url(
     username: str,
     password: str,
 ) -> str | None:
+    """Build signed auto-login URL for Adminer (similar to phpMyAdmin signon)."""
     hostname = (settings.adminer_hostname or "").strip()
     if not hostname and settings.app_hostname:
         hostname = f"pg.{settings.app_hostname}"
     if not hostname:
         return None
+    
     database = get_storage_database_name(storage)
+    host = get_postgres_host(settings)
+    port = get_postgres_port(settings)
+    
+    # Create signed token for auto-login (same format as phpMyAdmin)
+    # Format: base64url(payload).base64url(signature)
+    # Token expires in 60 seconds
+    token_payload = {
+        "u": username,  # username
+        "p": password,  # password
+        "db": database,  # database
+        "host": host,    # server host
+        "port": port,    # server port
+        "exp": int(time.time()) + 60,  # expires
+    }
+    
+    # Encode payload with base64url
+    payload_json = json.dumps(token_payload, separators=(",", ":"))
+    payload_b64 = _b64url_encode(payload_json.encode())
+    
+    # Sign with HMAC-SHA256 (same as phpMyAdmin)
+    secret = settings.secret_key.get_secret_value() if settings.secret_key else ""
+    signature = hmac.new(
+        secret.encode(),
+        payload_b64.encode(),
+        hashlib.sha256,
+    ).digest()
+    signature_b64 = _b64url_encode(signature)
+    
+    # Combine as JWT-like token
+    token = f"{payload_b64}.{signature_b64}"
+    
     return (
         f"{settings.url_scheme}://{hostname}/"
-        f"?server={get_postgres_host(settings)}"
-        f"&port={get_postgres_port(settings)}"
-        f"&db={database}"
-        f"&username={quote(username, safe='')}"
-        f"&password={quote(password, safe='')}"
+        f"?devpush_token={token}"
     )
 
 

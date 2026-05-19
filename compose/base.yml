@@ -311,22 +311,33 @@ services:
         condition: service_healthy
     networks:
       - default
+      - internal
     environment:
       ADMINER_DEFAULT_SERVER: postgres-storage
       ADMINER_DEFAULT_PORT: 5432
       ADMINER_DEFAULT_TYPE: pgsql
+      # Auto-login credentials (used by custom plugin)
+      ADMINER_AUTO_LOGIN_DB: ${ADMINER_AUTO_LOGIN_DB:-}
+      ADMINER_AUTO_LOGIN_USER: ${ADMINER_AUTO_LOGIN_USER:-}
+      ADMINER_AUTO_LOGIN_PASS: ${ADMINER_AUTO_LOGIN_PASS:-}
+    volumes:
+      - ../docker/adminer/login-password.php:/var/www/html/plugins/login-password.php:ro
+      - ../docker/adminer/config.php:/var/www/html/config.php:ro
+      - ../docker/adminer/entrypoint.sh:/usr/local/bin/devpush-adminer-entrypoint.sh:ro
+    entrypoint: ["/usr/local/bin/devpush-adminer-entrypoint.sh"]
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.adminer.rule=Host(`${ADMINER_HOSTNAME:-pg.${APP_HOSTNAME}}`)"
       - "traefik.http.routers.adminer.entrypoints=web"
       - "traefik.http.routers.adminer.service=adminer"
       - "traefik.http.services.adminer.loadbalancer.server.port=8080"
+      - "traefik.docker.network=devpush_default"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "php -r 'echo @file_get_contents(\"http://localhost:8080/\") ? \"OK\" : exit(1);'"]
+      interval: 15s
+      timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 10s
 
   loki:
     profiles: ["optional"]

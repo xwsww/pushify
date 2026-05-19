@@ -29,6 +29,9 @@ services:
   adminer:
     networks:
       - default
+      - internal
+    environment:
+      DEVPUSH_SIGNON_SECRET: ${SECRET_KEY}
     labels:
       - traefik.enable=true
       - traefik.docker.network=devpush_default
