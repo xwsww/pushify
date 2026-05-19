@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>{{ _('Check your browser...') }}</title>
+  <link rel="stylesheet" href="{{ url_for('security_challenge_static', asset_name='challenge.css').include_query_params(v=static_version) }}">
+</head>
+<body>
+  <div class="page">
+    <canvas id="blobs" aria-hidden="true"></canvas>
+    <main class="content" aria-live="polite" aria-busy="true">
+      <div class="content-inner">
+        <div class="kicker">{{ _('Browser check') }}</div>
+        <h1 class="title">{{ _('Verifying your browser') }}</h1>
+        <p class="desc">{{ _('Please wait while we confirm your request is safe.') }}</p>
+      </div>
+    </main>
+    <footer class="status-line">
+      <div class="status-inner">
+        <span class="brand">By /pushify/</span>
+        <div class="challenge">{{ challenge_id }}</div>
+      </div>
+    </footer>
+  </div>
+  <script src="{{ url_for('security_challenge_static', asset_name='challenge-blobs.min.js').include_query_params(v=static_version) }}"></script>
+  <script src="{{ url_for('security_challenge_static', asset_name='challenge-solve.min.js').include_query_params(v=static_version) }}"></script>
+  <noscript>
+    <div class="noscript-overlay">
+      <div class="noscript-content">
+        <h1 class="noscript-title">{{ _('JavaScript Required') }}</h1>
+        <p>{{ _('Please enable JavaScript and reload the page to continue.') }}</p>
+      </div>
+    </div>
+  </noscript>
+</body>
+</html>

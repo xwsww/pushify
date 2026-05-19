@@ -1,0 +1,18 @@
+[Unit]
+Description=/pushify/ stack
+After=docker.service network.target
+Wants=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/devpush
+ExecStart=/bin/bash /opt/devpush/scripts/start.sh
+ExecStop=/bin/bash /opt/devpush/scripts/stop.sh
+TimeoutStartSec=900
+TimeoutStopSec=600
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

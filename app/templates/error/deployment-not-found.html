@@ -1,0 +1,17 @@
+{% extends "layouts/base.html" %}
+{% from "error/_public.html" import public_error %}
+{% block base_content %}
+  {% if deployment_url %}
+    {{ public_error(
+      _('Deployment not active'),
+      _('This deployment is not running.'),
+      deployment_url,
+      _('Redeploy'),
+    ) }}
+  {% else %}
+    {{ public_error(
+      _('Service unavailable'),
+      _('This site is not available. It may not exist or has not been deployed yet.'),
+    ) }}
+  {% endif %}
+{% endblock %}

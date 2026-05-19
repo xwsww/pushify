@@ -1,0 +1,8 @@
+{% extends "layouts/base.html" %}
+{% from "error/_public.html" import public_error %}
+{% block base_content %}
+{{ public_error(
+  _('Gateway timeout'),
+  _('The app took too long to respond (504).'),
+) }}
+{% endblock %}

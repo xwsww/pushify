@@ -1,0 +1,94 @@
+{% from "admin/macros/pagination.html" import pagination %}
+{% from "macros/dialog.html" import dialog %}
+
+{% if allowlist_entries %}
+  <div class="rounded-xl border relative overflow-x-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="pl-4">{{ _('Type') }}</th>
+          <th>{{ _('Value') }}</th>
+          <th>{{ _('Added') }}</th>
+          <th class="w-12"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in allowlist_entries %}
+          <tr class="transition-all duration-200">
+            <td class="pl-4">
+              {% if entry.type == "email" %}
+                <span class="badge-secondary">{{ _('Email') }}</span>
+              {% elif entry.type == "domain" %}
+                <span class="badge-secondary">{{ _('Domain') }}</span>
+              {% elif entry.type == "pattern" %}
+                <span class="badge-secondary">{{ _('Pattern') }}</span>
+              {% endif %}
+            </td>
+            <td class="truncate font-medium w-full max-w-1">{{ entry.value }}</td>
+            <td>{{ entry.created_at | time_ago }}</td>
+            <td class="w-full text-right">
+              {% set trigger %}
+                {% include "icons/trash-2.svg" %}
+                {{ _('Delete') }}
+              {% endset %}
+              {% call dialog(
+                trigger=trigger,
+                title=_('Delete allowlist entry?'),
+                trigger_attrs={"class": "btn-sm-ghost text-destructive whitespace-nowrap"},
+                dialog_attrs={"class": "max-w-md whitespace-normal text-left"},
+                close_button=false,
+                close_on_overlay_click=false
+              ) %}
+                <div class="space-y-4" x-data="{ confirm: '' }">
+                  <p>{{ _('This will remove the %(type)s rule and users matching it will no longer be allowed to sign in.', type=entry.type) }}</p>
+                  <p>{{ _('To confirm, enter the value <b>"%(value)s"</b> below.', value=entry.value) | safe }}</p>
+                  <form
+                    method="post"
+                    action="{{ url_for('admin_settings').include_query_params(fragment='allowlist') }}"
+                    hx-post="{{ url_for('admin_settings').include_query_params(fragment='allowlist') }}"
+                    hx-target="#allowlist-content"
+                    hx-swap="innerHTML swap:150ms"
+                    hx-indicator="find .htmx-indicator"
+                    hx-push-url="false"
+                    hx-on::before-request="const row = this.closest('tr'); if (row) { row.classList.add('opacity-60', 'translate-x-1'); }"
+                    @htmx:after-request="$el.closest('dialog').close()"
+                  >
+                    {{ allowlist_delete_form.csrf_token() }}
+                    {{ allowlist_delete_form.entry_id(value=entry.id) }}
+                    {{ allowlist_delete_form.value(value=entry.value) }}
+                    {{ allowlist_delete_form.confirm(
+                      class_="w-full input",
+                      placeholder=_('Type the value to confirm'),
+                      **{'x-model': 'confirm'}
+                    ) }}
+                    <footer class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end mt-4">
+                      <button type="button" class="btn-ghost" onclick="this.closest('dialog').close()">{{ _('Cancel') }}</button>
+                      <button
+                        type="submit"
+                        name="action"
+                        value="delete_allowlist"
+                        class="btn-destructive"
+                        :disabled="confirm !== '{{ entry.value }}'"
+                      >
+                        {% include "icons/trash-2.svg" %}
+                        {{ _('Delete entry') }}
+                        <span class="htmx-indicator [&>svg]:animate-spin">
+                          {% include "icons/loader.svg" %}
+                        </span>
+                      </button>
+                    </footer>
+                  </form>
+                </div>
+              {% endcall %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {{ pagination(allowlist_pagination, "allowlist_page", request, hx_target="#allowlist-content", fragment="allowlist-content") }}
+{% else %}
+  <div class="text-center py-8 text-muted-foreground">
+    <p>{{ _('No allowlist entries found.') }}</p>
+  </div>
+{% endif %}

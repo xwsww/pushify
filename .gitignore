@@ -1,0 +1,30 @@
+# Ignore all dot files except a few
+.*
+!.gitignore
+!.gitattributes
+!.dockerignore
+!.env.example
+!.env.dev.example
+!.env.prod.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Supervisor
+supervisord.log
+supervisord.pid
+
+# Data (uploads and Traefik)
+/data/
+/logs/
+/backups/
+
+# Node
+node_modules/
+package-lock.json
+
+# Terraform
+terraform.tfstate
+terraform.tfstate.backup

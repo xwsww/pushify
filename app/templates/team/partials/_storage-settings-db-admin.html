@@ -1,0 +1,40 @@
+<div class="card">
+  <header class="border-b">
+    <h2>{{ _('Database administration') }}</h2>
+    <p>{{ _('Browse data and run SQL queries against the database.') }}</p>
+  </header>
+
+  <section class="space-y-3">
+    <div class="flex items-start gap-x-4">
+      {% if storage_admin_ready %}
+        <a href="{{ url_for('team_storage_data', team_slug=team.slug, storage_name=storage.name) }}" class="btn-outline" target="_blank">
+          {% include "icons/table.svg" %}
+          {{ _('Browse data') }}
+          <span class="opacity-50 [&>svg]:size-3">
+            {% include "icons/external-link.svg" %}
+          </span>
+        </a>
+        <a href="{{ url_for('team_storage_sql', team_slug=team.slug, storage_name=storage.name) }}" class="btn-outline" target="_blank">
+          {% include "icons/square-terminal.svg" %}
+          {{ _('Run SQL queries') }}
+          <span class="opacity-50 [&>svg]:size-3">
+            {% include "icons/external-link.svg" %}
+          </span>
+        </a>
+      {% else %}
+        <button type="button" class="btn-outline opacity-60 cursor-not-allowed" disabled>
+          {% include "icons/table.svg" %}
+          {{ _('Browse data') }}
+        </button>
+        <button type="button" class="btn-outline opacity-60 cursor-not-allowed" disabled>
+          {% include "icons/square-terminal.svg" %}
+          {{ _('Run SQL queries') }}
+        </button>
+      {% endif %}
+    </div>
+
+    {% if storage_admin_error %}
+      <p class="text-sm text-muted-foreground">{{ storage_admin_error }}</p>
+    {% endif %}
+  </section>
+</div>

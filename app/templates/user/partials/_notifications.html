@@ -1,0 +1,9 @@
+{% from "user/macros/notifications.html" import notifications as notification_bell with context %}
+{{ notification_bell(
+  notifications=notifications,
+  invite_by_id=invite_by_id,
+  pending_invites=pending_invites,
+  unread_count=unread_count,
+  accept_invite_form=accept_invite_form,
+  decline_invite_form=decline_invite_form,
+) }}

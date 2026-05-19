@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      dockerfile: docker/Dockerfile.app.dev
+    entrypoint: /entrypoint.app.dev.sh
+    labels:
+      - traefik.http.routers.app.entrypoints=web
+      - traefik.http.routers.app.priority=10
+    volumes:
+      - ${APP_DIR:-..}/app:/app
+    environment:
+      ENV: development
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+
+  worker-jobs:
+    build:
+      dockerfile: docker/Dockerfile.app.dev
+    entrypoint: /entrypoint.worker-jobs.dev.sh
+    volumes:
+      - ${APP_DIR:-..}/app:/app
+    environment:
+      ENV: development
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+
+  worker-monitor:
+    build:
+      dockerfile: docker/Dockerfile.app.dev
+    entrypoint: /entrypoint.worker-monitor.dev.sh
+    volumes:
+      - ${APP_DIR:-..}/app:/app
+    environment:
+      ENV: development
+      UV_PROJECT_ENVIRONMENT: /opt/venv
+
+  phpmyadmin:
+    labels:
+      - traefik.http.routers.phpmyadmin.entrypoints=web
+      - traefik.http.routers.phpmyadmin.priority=9
+
+  traefik:
+    ports:
+      - "80:80"
+    volumes:
+      - ${DATA_DIR:-../data}/traefik:/etc/traefik/dynamic_conf
+    labels:
+      - "traefik.http.middlewares.deployment-redirect.redirectRegex.replacement=http://$$1/errors/503"
+      - "traefik.http.routers.pushify-deploy-challenge.rule=HostRegexp(`^.+\\.${DEPLOY_DOMAIN}$`) && PathPrefix(`/.pushify`)"
+      - "traefik.http.routers.pushify-deploy-challenge.entrypoints=web"
+      - "traefik.http.routers.pushify-deploy-challenge.priority=25"
+      - "traefik.http.routers.pushify-deploy-challenge.service=pushify-security@file"
+      - "traefik.http.routers.pushify-deploy-errors.rule=HostRegexp(`^.+\\.${DEPLOY_DOMAIN}$`) && PathPrefix(`/errors`)"
+      - "traefik.http.routers.pushify-deploy-errors.entrypoints=web"
+      - "traefik.http.routers.pushify-deploy-errors.priority=24"
+      - "traefik.http.routers.pushify-deploy-errors.service=pushify-security@file"

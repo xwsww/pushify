@@ -1,0 +1,13 @@
+{% extends "layouts/base.html" %}
+
+{% block base_content %}
+{% include "partials/_header.html" %}
+
+{% block app_content %}{% endblock %}
+
+{% from "macros/toast.html" import toaster %}
+{% call toaster(toasts=get_flashed_messages()) %}
+{{ toaster_header | safe }}
+{% endcall %}
+
+{% endblock %}

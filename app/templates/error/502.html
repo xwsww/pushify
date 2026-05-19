@@ -1,0 +1,8 @@
+{% extends "layouts/base.html" %}
+{% from "error/_public.html" import public_error %}
+{% block base_content %}
+{{ public_error(
+  _('Bad gateway'),
+  _('The app is temporarily unreachable (502).'),
+) }}
+{% endblock %}

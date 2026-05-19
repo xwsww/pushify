@@ -1,0 +1,118 @@
+{# Simplified notification bell dropdown - removed full page notifications #}
+{% macro notifications(notifications=[], invite_by_id={}, pending_invites=[], unread_count=0, accept_invite_form=None, decline_invite_form=None) %}
+  {% from "macros/dropdown-menu.html" import dropdown_menu with context %}
+  {% from "macros/dialog.html" import dialog with context %}
+
+  {% for invite in pending_invites %}
+    {% if decline_invite_form and accept_invite_form %}
+    {% set footer %}
+      <form
+        method="post"
+        action="{{ url_for('user_notifications').include_query_params(fragment='decline_invite') }}"
+        hx-post="{{ url_for('user_notifications').include_query_params(fragment='decline_invite') }}"
+        hx-swap="none"
+        hx-disabled-elt="button"
+        hx-indicator="find .htmx-indicator"
+        @htmx:after-request="$el.closest('dialog').close()"
+      >
+        {{ decline_invite_form.csrf_token }}
+        {{ decline_invite_form.invite_id(value=invite.id) }}
+        <button type="submit" class="btn-ghost max-sm:w-full">
+          {{ _('Decline') }}
+          <span class="htmx-indicator [&>svg]:size-4 [&>svg]:animate-spin">{% include "icons/loader.svg" %}</span>
+        </button>
+      </form>
+      <button type="button" class="btn-ghost" onclick="this.closest('dialog').close()">{{ _('Cancel') }}</button>
+      <form
+        hx-post="{{ url_for('user_notifications').include_query_params(fragment='accept_invite') }}"
+        hx-swap="none"
+        hx-disabled-elt="button"
+        hx-indicator="find .htmx-indicator"
+        @htmx:after-request="$el.closest('dialog').close()"
+      >
+        {{ accept_invite_form.csrf_token }}
+        {{ accept_invite_form.invite_id(value=invite.id) }}
+        <button type="submit" class="btn max-sm:w-full">
+          {{ _('Accept') }}
+          <span class="htmx-indicator [&>svg]:size-4 [&>svg]:animate-spin">{% include "icons/loader.svg" %}</span>
+        </button>
+      </form>
+    {% endset %}
+    {% call dialog(
+      id="dialog-invite-" ~ invite.id,
+      title=_('Join %(team)s', team=invite.team.name if invite.team else _('Team')),
+      dialog_attrs={"class": "max-w-md"},
+      footer=footer
+    ) %}
+      <p class="text-sm text-muted-foreground">
+        {% set inviter_name = (invite.inviter.name or invite.inviter.username) if invite.inviter else _('Someone') %}
+        {{ _('%(name)s invited you to join this team.', name=inviter_name) }}
+      </p>
+    {% endcall %}
+    {% endif %}
+  {% endfor %}
+
+  {% set trigger %}
+    {% include "icons/bell.svg" %}
+    {% if unread_count > 0 %}
+      <span class="size-2 rounded-full bg-destructive absolute top-0.5 right-0.5 border border-background"></span>
+    {% endif %}
+  {% endset %}
+  {% call dropdown_menu(
+    trigger=trigger,
+    trigger_attrs={"class": "btn-sm-icon-ghost relative"},
+    popover_attrs={"data-align": "end", "class": "max-w-sm"}
+  ) %}
+    <div class="flex items-center justify-between gap-x-2 px-3 py-2 border-b">
+      <span class="text-sm font-medium">{{ _('Notifications') }}</span>
+      {% if unread_count > 0 %}
+        <form
+          method="post"
+          action="{{ url_for('user_notifications').include_query_params(fragment='mark_all_read') }}"
+          hx-post="{{ url_for('user_notifications').include_query_params(fragment='mark_all_read') }}"
+          hx-swap="none"
+          hx-on::after-request="window.location.reload()"
+        >
+          {{ accept_invite_form.csrf_token if accept_invite_form else '' }}
+          <button type="submit" class="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            {{ _('Mark all read') }}
+          </button>
+        </form>
+      {% endif %}
+    </div>
+    <div class="max-h-80 overflow-y-auto">
+      {% if notifications %}
+        {% for n in notifications %}
+          {% set invite = invite_by_id.get(n.payload.get('invite_id')) if n.type == 'team_invite' and n.payload is mapping and n.payload.get('invite_id') else none %}
+          <div class="px-3 py-2 hover:bg-muted/50 transition-colors {% if not n.read_at %}bg-muted/30{% endif %}">
+            {% if invite %}
+              <button
+                type="button"
+                class="text-left w-full"
+                onclick="document.getElementById('dialog-invite-{{ invite.id }}').showModal()"
+              >
+                <span class="truncate block text-sm font-medium">{{ n.title }}</span>
+                <span class="truncate block text-xs text-muted-foreground">{{ n.body }}</span>
+                <span class="text-xs text-muted-foreground block mt-0.5">{{ n.created_at | time_ago }}</span>
+              </button>
+            {% elif n.action_url %}
+              <a href="{{ url_for('user_notification_open', id=n.id) }}" class="block text-left" hx-boost="false">
+                <span class="truncate block text-sm {% if not n.read_at %}font-medium{% endif %}">{{ n.title }}</span>
+                {% if n.body %}<span class="truncate block text-xs text-muted-foreground">{{ n.body }}</span>{% endif %}
+                <span class="text-xs text-muted-foreground block mt-0.5">{{ n.created_at | time_ago }}</span>
+              </a>
+            {% else %}
+              <div class="text-left">
+                <span class="truncate block text-sm {% if not n.read_at %}font-medium{% endif %}">{{ n.title }}</span>
+                {% if n.body %}<span class="truncate block text-xs text-muted-foreground">{{ n.body }}</span>{% endif %}
+                <span class="text-xs text-muted-foreground block mt-0.5">{{ n.created_at | time_ago }}</span>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="px-3 py-4 text-sm text-muted-foreground text-center">{{ _('No notifications') }}</p>
+      {% endif %}
+    </div>
+  {% endcall %}
+{% endmacro %}

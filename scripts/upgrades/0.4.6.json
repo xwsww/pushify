@@ -1,0 +1,4 @@
+{
+  "components": "app,traefik",
+  "reason": "Browser challenge routing on deploy domains, security middlewares, and Traefik label updates (recreates traefik)"
+}

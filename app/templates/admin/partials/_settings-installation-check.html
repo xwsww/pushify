@@ -1,0 +1,15 @@
+{% if update_info %}
+  <div class="badge-secondary text-amber-600 dark:text-amber-400 bg-amber-500/10">
+    {{ _('Update') }}
+  </div>
+  {% if update_info.label != version_info.get('git_ref') %}
+    <span class="text-xs font-mono text-muted-foreground">{{ update_info.label }}</span>
+  {% endif %}
+{% else %}
+  <div class="badge-secondary">
+    {{ _('Latest') }}
+  </div>
+  {% if error %}
+    <span class="text-xs text-muted-foreground">{{ error }}</span>
+  {% endif %}
+{% endif %}

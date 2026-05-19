@@ -1,0 +1,10 @@
+/var/lib/devpush/traefik/logs/access.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    size 100M
+}

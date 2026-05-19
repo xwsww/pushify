@@ -1,0 +1,15 @@
+# pushify-crowdsec-scenario-v1 — many distinct paths from one IP
+type: leaky
+name: pushify/http-crawl
+description: Ban aggressive crawlers / scanners (Traefik)
+filter: >-
+  evt.Meta.service == 'http'
+  && evt.Meta.log_type in ['http_access-log', 'http_access-log-v2']
+  && evt.Parsed.remote_addr != ''
+groupby: evt.Parsed.remote_addr + '/' + evt.Parsed.request_uri
+capacity: 25
+leakspeed: 3s
+labels:
+  service: http
+  type: ban
+  remediation: true

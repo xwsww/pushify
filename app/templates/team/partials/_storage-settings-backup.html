@@ -1,0 +1,157 @@
+{% from "macros/select.html" import select %}
+
+<div id="storage-backup-section" class="space-y-6">
+  {% set schedule_items = [] %}
+  {% for key, meta in backup_schedules.items() %}
+    {% set _ = schedule_items.append({"label": meta.label, "value": key}) %}
+  {% endfor %}
+  {% set retention_items = [
+    {"label": _("5 backups"), "value": "5"},
+    {"label": _("10 backups"), "value": "10"},
+    {"label": _("15 backups"), "value": "15"},
+    {"label": _("20 backups"), "value": "20"},
+  ] %}
+
+  <form
+    method="post"
+    action="{{ url_for('team_storage_settings', team_slug=team.slug, storage_name=storage.name).include_query_params(fragment='backup') }}"
+    hx-post="{{ url_for('team_storage_settings', team_slug=team.slug, storage_name=storage.name).include_query_params(fragment='backup') }}"
+    hx-target="#storage-backup-section"
+    hx-swap="outerHTML"
+    hx-indicator="find .htmx-indicator"
+    class="card relative"
+    x-data="{ enabled: false, schedule: 'every_12h', maxBackups: '20', schedules: {} }"
+    x-init="Object.assign($data, JSON.parse($el.querySelector('[data-backup-init]').textContent))"
+    @change="
+      const s = $el.querySelector('input[name=schedule]');
+      if (s) schedule = s.value;
+      const m = $el.querySelector('input[name=max_backups]');
+      if (m) maxBackups = m.value;
+    "
+  >
+    <script type="application/json" data-backup-init>{{ backup_init | tojson }}</script>
+    {{ backup_form.csrf_token() }}
+    <header class="border-b">
+      <h2>{{ _('Database backups') }}</h2>
+      <p>{{ _('Schedule automatic database backups and download or restore them when you need to.') }}</p>
+    </header>
+
+    <section class="space-y-6">
+      <label class="flex items-center gap-x-3">
+        {{ backup_form.enabled(class="checkbox", **{"x-model": "enabled"}) }}
+        <span>{{ _('Enable automatic backups') }}</span>
+      </label>
+
+      <div class="space-y-4" x-show="enabled" x-cloak>
+        <div class="space-y-2">
+          <label>{{ _('Backup schedule') }}</label>
+          {{ select(
+            name="schedule",
+            items=schedule_items,
+            selected=backup_form.schedule.data or backup_config.schedule,
+            main_attrs={"class": "max-w-md w-full"}
+          ) }}
+          {% for error in backup_form.schedule.errors %}
+            <p class="text-destructive text-sm">{{ error }}</p>
+          {% endfor %}
+          <p class="text-sm text-muted-foreground" x-text="schedules[schedule]?.hint || ''"></p>
+        </div>
+
+        <div class="space-y-2">
+          <label>{{ _('How many backups to keep') }}</label>
+          {{ select(
+            name="max_backups",
+            items=retention_items,
+            selected=(backup_form.max_backups.data or backup_config.max_backups) | string,
+            main_attrs={"class": "max-w-md w-full"}
+          ) }}
+          {% for error in backup_form.max_backups.errors %}
+            <p class="text-destructive text-sm">{{ error }}</p>
+          {% endfor %}
+          <p class="text-sm text-muted-foreground">
+            {{ _('Keeps up to') }}
+            <span x-text="maxBackups"></span>
+            {{ _('backup files. When a new backup is created and the limit is reached, the oldest file is removed automatically.') }}
+          </p>
+        </div>
+      </div>
+
+      {% if backup_config.last_backup_at %}
+        <p class="text-sm text-muted-foreground">
+          {{ _('Last backup') }}:
+          {% if backup_config.last_backup_status == 'ok' %}
+            <span class="text-foreground">{{ backup_config.last_backup_at | time_ago }}</span>
+          {% else %}
+            <span class="text-destructive">{{ backup_config.last_backup_error or _('Failed') }}</span>
+          {% endif %}
+        </p>
+      {% endif %}
+
+      <div class="flex flex-wrap gap-2">
+        <button type="submit" class="btn-sm">{{ _('Save backup settings') }}</button>
+        <button
+          type="submit"
+          class="btn-sm-outline"
+          formaction="{{ url_for('team_storage_settings', team_slug=team.slug, storage_name=storage.name).include_query_params(fragment='backup_run') }}"
+          {% if storage.status != 'active' %}disabled{% endif %}
+        >
+          {% include "icons/cloud-upload.svg" %}
+          {{ _('Back up now') }}
+        </button>
+      </div>
+    </section>
+
+    <div class="htmx-indicator flex items-center justify-center inset-0 absolute bg-background/80 rounded-xl">
+      <div class="flex items-center gap-x-2 text-muted-foreground [&>svg]:size-4 [&>svg]:animate-spin">
+        {% include "icons/loader.svg" %}
+        {{ _('Saving') }}
+      </div>
+    </div>
+  </form>
+
+  <div class="card">
+    <header class="border-b">
+      <h2>{{ _('Backup files') }}</h2>
+      <p>{{ _('Download a snapshot. Backups from other storages are not accessible here.') }}</p>
+    </header>
+    <section>
+      {% if backups %}
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{{ _('File') }}</th>
+                <th>{{ _('Type') }}</th>
+                <th>{{ _('Size') }}</th>
+                <th>{{ _('Created') }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for backup in backups %}
+                <tr>
+                  <td class="font-mono text-xs max-w-xs truncate">{{ backup.filename }}</td>
+                  <td class="text-muted-foreground">{{ backup.storage_type | upper }} · gzip</td>
+                  <td class="text-muted-foreground whitespace-nowrap">{{ backup.size_display }}</td>
+                  <td class="text-muted-foreground whitespace-nowrap">{{ backup.created_at | time_ago }}</td>
+                  <td class="text-right">
+                    <a
+                      class="btn-sm-outline"
+                      href="{{ url_for('team_storage_backup_download', team_slug=team.slug, storage_name=storage.name, backup_id=backup.id) }}"
+                      download
+                    >
+                      {% include "icons/arrow-down.svg" %}
+                      {{ _('Download') }}
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="p-6 text-center text-muted-foreground text-sm">{{ _('No backups yet.') }}</p>
+      {% endif %}
+    </section>
+  </div>
+</div>

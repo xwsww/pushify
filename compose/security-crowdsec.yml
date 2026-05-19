@@ -1,0 +1,17 @@
+# Optional overlay: docker compose -f compose/base.yml -f compose/override.yml \
+#   -f compose/ssl-default.yml -f compose/security-crowdsec.yml up -d
+#
+# Requires Traefik CrowdSec bouncer plugin on the host image or custom traefik build.
+# See https://doc.crowdsec.net/docs/appsec/traefik/
+
+services:
+  crowdsec:
+    image: crowdsecurity/crowdsec:latest
+    restart: always
+    environment:
+      COLLECTIONS: crowdsecurity/traefik crowdsecurity/http-cve
+    volumes:
+      - ${DATA_DIR:-../data}/crowdsec:/etc/crowdsec
+      - ${DATA_DIR:-../data}/traefik/logs:/var/log/traefik:ro
+    networks:
+      - internal

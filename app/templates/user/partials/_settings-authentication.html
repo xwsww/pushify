@@ -1,0 +1,35 @@
+<div class="card">
+  <header class="border-b">
+    <h2>{{ _("Authentication") }}</h2>
+    <p>{{ _("Manage your GitHub sign-in connection.") }}</p>
+  </header>
+
+  <section>
+    <ul>
+      <li class="flex items-center gap-x-6 border border-border/100 border-b-0 last:border-b first:rounded-t-xl last:rounded-b-xl px-4 h-12 text-sm hover:bg-muted/50 transition-colors bg-clip-padding [&>svg]:size-4">
+          {% include "icons/mail.svg" %}
+          <div class="font-medium">{{ _('Email') }}</div>
+          <div class="text-muted-foreground">{{ current_user.email }}</div>
+        </form>
+      </li>
+      <li class="flex items-center gap-x-6 border border-border/100 border-b-0 last:border-b first:rounded-t-xl last:rounded-b-xl px-4 h-12 text-sm hover:bg-muted/50 transition-colors bg-clip-padding [&>svg]:size-4 {% if not github_username %}[&>svg]:grayscale [&>svg]:opacity-50{% endif %}">
+        {% include "icons/github.svg" %}
+        <div class="font-medium {% if not github_username %}text-muted-foreground{% endif %}">{{ _('GitHub') }}</div>
+        {% if github_username %}
+          <div class="text-muted-foreground">{{ github_username }}</div>
+        {% else %}
+          <a class="btn-sm-outline ml-auto" href="{{ url_for('github_authorize').include_query_params(next='/settings#authentication') }}">
+            {{ _('Connect') }}
+          </a>
+        {% endif %}
+      </li>
+    </ul>
+  </section>
+</div>
+
+<div class="htmx-indicator flex items-center justify-center inset-0 absolute bg-background/80 rounded-xl">
+  <div class="flex items-center gap-x-2 text-muted-foreground [&>svg]:size-4 [&>svg]:animate-spin">
+    {% include "icons/loader.svg" %}
+    {{ _('Saving') }}
+  </div>
+</div>

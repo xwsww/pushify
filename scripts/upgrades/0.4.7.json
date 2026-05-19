@@ -1,0 +1,4 @@
+{
+  "components": "worker-jobs,worker-monitor",
+  "reason": "Worker import/healthcheck fixes; normalize duplicate worker containers from failed rollouts"
+}

@@ -1,0 +1,33 @@
+services:
+  traefik:
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.endpoint=tcp://docker-proxy:2375"
+      - "--providers.docker.watch=true"
+      - "--providers.file.directory=/etc/traefik/dynamic_conf"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Do not redirect all of :80 → :443 here; it breaks ACME HTTP-01 (panel 404 on HTTPS until cert exists).
+      - "--certificatesresolvers.le.acme.email=${LE_EMAIL}"
+      - "--certificatesresolvers.le.acme.storage=/etc/traefik/dynamic_conf/acme.json"
+      - "--certificatesresolvers.lehttp.acme.email=${LE_EMAIL}"
+      - "--certificatesresolvers.lehttp.acme.storage=/etc/traefik/dynamic_conf/acme.json"
+      - "--certificatesresolvers.lehttp.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--accesslog.format=json"
+      - "--accesslog.bufferingsize=0"
+    volumes:
+      - ${DATA_DIR:-/var/lib/devpush}/traefik:/etc/traefik/dynamic_conf
+      - ${DATA_DIR:-/var/lib/devpush}/traefik/logs:/var/log/traefik
+    labels:
+      - "traefik.http.routers.cert-bootstrap-web.rule=Host(`${APP_HOSTNAME}`)"
+      - "traefik.http.routers.cert-bootstrap-web.entrypoints=web"
+      - "traefik.http.routers.cert-bootstrap-web.priority=1"
+      - "traefik.http.routers.cert-bootstrap-web.service=noop@internal"
+      - "traefik.http.routers.cert-bootstrap-web.tls=true"
+      - "traefik.http.routers.cert-bootstrap-web.tls.certresolver=lehttp"
+      - "traefik.http.routers.cert-bootstrap-web.tls.domains[0].main=${APP_HOSTNAME}"

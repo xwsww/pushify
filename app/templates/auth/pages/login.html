@@ -1,0 +1,28 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}Sign in{% endblock %}
+
+{% block app_content %}
+<div class="flex flex-col items-center justify-center h-[calc(100vh-65px)]">
+  <div class="w-full max-w-xs space-y-6">
+    <h2 class="h2 text-center">Sign in to {{ app_name }}</h2>
+    {{ login_header | safe }}
+    <section class="grid gap-4" x-data="{ loading: null }">
+      <button
+        class="btn-outline w-full"
+        @click="
+          loading = 'github';
+          window.location.href = '{{ url_for('auth_github_login') }}';
+        "
+        :disabled="loading"
+      >
+        {% include "icons/github.svg" %}
+        {{ _("Continue with GitHub") }}
+        <span x-show="loading === 'github'" class="[&>svg]:size-4 [&>svg]:animate-spin">
+          {% include "icons/loader.svg" %}
+        </span>
+      </button>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% from "macros/copy.html" import copy %}
+{% from "macros/dialog.html" import dialog %}
+
+<div class="card">
+  <header class="border-b">
+    <h2>{{ _('MariaDB access') }}</h2>
+    <p>{{ _('Connection details, phpMyAdmin access, and password rotation for this storage.') }}</p>
+  </header>
+
+  <section class="space-y-6">
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div class="space-y-2">
+        <label class="label">{{ _('Database') }}</label>
+        <div class="relative">
+          <input
+            type="text"
+            class="input w-full font-mono text-[13px] pr-9 text-muted-foreground"
+            value="{{ mariadb_database_name or '' }}"
+            readonly
+          />
+          {{ copy(
+            value=mariadb_database_name or '',
+            class="btn-icon-ghost text-muted-foreground hover:text-accent-foreground absolute right-1.5 top-1/2 -translate-y-1/2 size-6"
+          ) }}
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <label class="label">{{ _('Host') }}</label>
+        <div class="relative">
+          <input
+            type="text"
+            class="input w-full font-mono text-[13px] pr-9 text-muted-foreground"
+            value="{{ mariadb_connection.host if mariadb_connection else 'mariadb' }}"
+            readonly
+          />
+          {{ copy(
+            value=mariadb_connection.host if mariadb_connection else 'mariadb',
+            class="btn-icon-ghost text-muted-foreground hover:text-accent-foreground absolute right-1.5 top-1/2 -translate-y-1/2 size-6"
+          ) }}
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <label class="label">{{ _('Port') }}</label>
+        <div class="relative">
+          <input
+            type="text"
+            class="input w-full font-mono text-[13px] pr-9 text-muted-foreground"
+            value="{{ mariadb_connection.port if mariadb_connection else '3306' }}"
+            readonly
+          />
+          {{ copy(
+            value=mariadb_connection.port if mariadb_connection else '3306',
+            class="btn-icon-ghost text-muted-foreground hover:text-accent-foreground absolute right-1.5 top-1/2 -translate-y-1/2 size-6"
+          ) }}
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <label class="label">{{ _('User') }}</label>
+        <div class="relative">
+          <input
+            type="text"
+            class="input w-full font-mono text-[13px] pr-9 text-muted-foreground"
+            value="{{ mariadb_connection.username if mariadb_connection else '' }}"
+            readonly
+          />
+          {{ copy(
+            value=mariadb_connection.username if mariadb_connection else '',
+            class="btn-icon-ghost text-muted-foreground hover:text-accent-foreground absolute right-1.5 top-1/2 -translate-y-1/2 size-6"
+          ) }}
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-2">
+      <label class="label">{{ _('Connection') }}</label>
+      <div class="relative">
+        <input
+          type="text"
+          class="input w-full font-mono text-[13px] pr-9 text-muted-foreground"
+          value="{{ mariadb_connection.database_url_display if mariadb_connection else '' }}"
+          readonly
+        />
+        {{ copy(
+          value=mariadb_connection.database_url_display if mariadb_connection else '',
+          class="btn-icon-ghost text-muted-foreground hover:text-accent-foreground absolute right-1.5 top-1/2 -translate-y-1/2 size-6"
+        ) }}
+      </div>
+    </div>
+
+    <div class="flex items-start gap-x-4">
+      {% if mariadb_open_url and mariadb_phpmyadmin_url %}
+        <a href="{{ mariadb_open_url }}" class="btn-outline" target="_blank" rel="noreferrer">
+          {% include "icons/external-link.svg" %}
+          {{ _('Open in phpMyAdmin') }}
+        </a>
+      {% else %}
+        <button type="button" class="btn-outline opacity-60 cursor-not-allowed" disabled>
+          {{ _('phpMyAdmin unavailable') }}
+        </button>
+      {% endif %}
+
+      <form
+        method="post"
+        action="{{ url_for('team_storage_settings', team_slug=team.slug, storage_name=storage.name).include_query_params(fragment='mariadb') }}"
+        hx-post="{{ url_for('team_storage_settings', team_slug=team.slug, storage_name=storage.name).include_query_params(fragment='mariadb') }}"
+        hx-target="closest .card"
+        hx-swap="outerHTML"
+        class="inline-flex"
+      >
+        {{ mariadb_rotate_user_form.csrf_token(id=False) }}
+        {{ mariadb_rotate_user_form.user_id(id=False, value=mariadb_admin_user.id if mariadb_admin_user else '') }}
+        <button type="submit" name="rotate_db_user" value="1" class="btn-outline">
+          {% include "icons/rotate-ccw.svg" %}
+          {{ _('Rotate password') }}
+        </button>
+      </form>
+    </div>
+
+    {% if mariadb_password_reveal %}
+      {% call dialog(
+        id="dialog-mariadb-password-reveal",
+        title=_('New password'),
+        description=_('This password is shown only once after creation or rotation.'),
+        dialog_attrs={"class": "max-w-lg"},
+        close_button=false,
+        close_on_overlay_click=false
+      ) %}
+        <div class="space-y-4">
+          <div class="space-y-1">
+            <label class="label">{{ _('Password') }}</label>
+            <div class="relative">
+              <input type="text" class="input w-full font-mono text-[13px] pr-9 text-muted-foreground" value="{{ mariadb_password_reveal.password }}" readonly />
+              {{ copy(
+                value=mariadb_password_reveal.password,
+                class="btn-icon-ghost text-muted-foreground hover:text-accent-foreground absolute right-1.5 top-1/2 -translate-y-1/2 size-6"
+              ) }}
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <label class="label">{{ _('Full connection') }}</label>
+            <div class="relative">
+              <input type="text" class="input w-full font-mono text-[13px] pr-9 text-muted-foreground" value="{{ mariadb_password_reveal.database_url }}" readonly />
+              {{ copy(
+                value=mariadb_password_reveal.database_url,
+                class="btn-icon-ghost text-muted-foreground hover:text-accent-foreground absolute right-1.5 top-1/2 -translate-y-1/2 size-6"
+              ) }}
+            </div>
+          </div>
+
+          <footer class="flex justify-end pt-2">
+            <button type="button" class="btn" onclick="this.closest('dialog').close()">{{ _('Close') }}</button>
+          </footer>
+        </div>
+      {% endcall %}
+      <script>
+        (() => {
+          const openDialog = () => {
+            const dialog = document.getElementById('dialog-mariadb-password-reveal');
+            if (dialog && !dialog.open) {
+              dialog.showModal();
+            }
+          };
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', openDialog, { once: true });
+          } else {
+            openDialog();
+          }
+        })();
+      </script>
+    {% endif %}
+  </section>
+</div>

@@ -1,0 +1,249 @@
+{% macro render_build_and_deploy(form, presets, runners, init_values=true) %}
+<div
+  class="space-y-6"
+  x-data="{
+    presets: [],
+    runners: [],
+    selectedPreset: '{{ form.preset.data or "" }}',
+    initValues: {{ 'true' if init_values else 'false' }},
+    requiresHttp: {{ 'true' if form.requires_http.data else 'false' }},
+    getPreset() {
+      if (!this.selectedPreset) return null;
+      return this.presets.find(p => p.slug === this.selectedPreset);
+    },
+    allowsRequiresHttpOverride() {
+      return this.getPreset()?.config?.allow_requires_http_override === true;
+    },
+    disableRunnerOptions(preset) {
+      if (!$refs.runnerInput) return;
+      $refs.runnerInput.querySelectorAll('option').forEach(option => {
+        if (preset?.allowedRunners) {
+          option.disabled = !preset.allowedRunners.includes(option.value);
+        } else if (!preset?.category) {
+          option.disabled = false;
+        } else {
+          if (option.parentElement.tagName === 'OPTGROUP' && option.parentElement.label === preset?.category) {
+            option.disabled = false;
+          } else {
+            option.disabled = true;
+          }
+        }
+      });
+    },
+    setPreset(slug = null, force = false, apply = true) {
+      this.selectedPreset = slug || '';
+      if (!slug) {
+        this.disableRunnerOptions(null);
+        this.requiresHttp = true;
+        if ($refs.requiresHttpInput) $refs.requiresHttpInput.checked = true;
+        return;
+      }
+      const preset = this.getPreset();
+      if (!preset) return;
+      const applyValue = (ref, value) => {
+        if (!ref) return;
+        if (value === undefined || value === null) return;
+        if (ref.type === 'checkbox') {
+          ref.checked = Boolean(value);
+          this.requiresHttp = Boolean(value);
+          return;
+        }
+        if (force || !ref.value) ref.value = value;
+      };
+      this.disableRunnerOptions(preset);
+      if (!apply) return;
+      
+      let runnerValue = preset?.config?.runner;
+      const options = Array.from($refs.runnerInput.querySelectorAll('option'));
+      if (!options.find(option => option.value === runnerValue && !option.disabled)) {
+        runnerValue = options.find(option => !option.disabled && option.parentElement?.label === preset?.category)?.value;
+      }
+      applyValue($refs.runnerInput, runnerValue);
+      applyValue($refs.rootDirectoryInput, preset?.config?.root_directory);
+      applyValue($refs.buildCommandInput, preset?.config?.build_command);
+      applyValue($refs.preDeployCommandInput, preset?.config?.pre_deploy_command);
+      applyValue($refs.startCommandInput, preset?.config?.start_command);
+      applyValue(
+        $refs.requiresHttpInput,
+        this.allowsRequiresHttpOverride() ? preset?.config?.requires_http : true
+      );
+    },
+  }"
+  x-init="
+    runners = JSON.parse($refs.runnersData.textContent);
+    presets = JSON.parse($refs.presetsData.textContent).map(preset => {
+      const presetTags = Array.isArray(preset?.tags) ? preset.tags : [];
+      if (!presetTags.length) return { ...preset, allowedRunners: null };
+      const matched = runners.filter(runner =>
+        Array.isArray(runner?.tags) && presetTags.every(tag => runner.tags.includes(tag))
+      );
+      return { ...preset, allowedRunners: matched.length ? matched.map(r => r.slug) : null };
+    });
+    setPreset(selectedPreset, false, initValues);
+    if ($refs.runnerInput.value !== '{{ form.runner.data or "" }}') {
+      $dispatch('change');
+    }
+  "
+>
+  <script type="application/json" x-ref="presetsData">{{ presets | tojson }}</script>
+  <script type="application/json" x-ref="runnersData">{{ runners | tojson }}</script>
+  {# FRAMEWORK PRESET #}
+  <div class="space-y-3">
+    <label for="preset">{{ _('Framework preset') }}</label>
+    <div class="flex flex-wrap items-center gap-2">
+      {% from "macros/select.html" import select %}
+      {% set default_option %}
+        <span class="flex items-center gap-x-2 [&>svg]:text-muted-foreground">
+          {% include "icons/ban.svg" %}
+          {{ _('None') }}
+        </span>
+      {% endset %}
+      {% set preset_options = namespace(items=[{"label": default_option, "value": ""}]) %}
+      {% for preset in presets %}
+        {% set label %}
+          <span class="flex items-center gap-x-2">
+            {{ (preset.config and preset.config.logo) | safe }}
+            {{ preset.name }}
+            {% if preset.config and preset.config.beta %}
+              <span class="badge-outline">Beta</span>
+            {% endif %}
+          </span>
+        {% endset %}
+        {% set preset_options.items = preset_options.items + [{"label": label, "value": preset.slug}] %}
+      {% endfor %}
+      {{ select(
+        name="preset",
+        items=preset_options.items,
+        selected=form.preset.data,
+        main_attrs={'@change': 'setPreset(event.detail.value, true)'},
+        is_combobox=True,
+        listbox_attrs={'class': 'max-h-[162px] overflow-y-auto scrollbar'}
+      ) }}
+        
+      <button
+        type="button"
+        class="btn-sm-icon-outline text-muted-foreground hover:text-accent-foreground"
+        data-tooltip="{{ _('Reset') }}"
+        aria-label="{{ _('Reset') }}"
+        x-show="selectedPreset"
+        x-cloak
+        @click="if (window.confirm('{{ _('Reset all fields to the preset defaults (root directory, runner, commands)?') }}')) { setPreset(selectedPreset, true); $dispatch('input'); }"
+      >
+        {% include "icons/rotate-ccw.svg" %}
+      </button>
+    </div>
+    {% for error in form.preset.errors %}
+      <p class="text-sm text-destructive">{{ error }}</p>
+    {% endfor %}
+  </div>
+
+  {# RUNNER #}
+  <div class="space-y-3">
+    {{ form.runner.label() }}
+    {{ form.runner(**{
+      'x-ref': 'runnerInput',
+      'aria-invalid': 'true' if form.runner.errors or (is_runner_valid is defined and not is_runner_valid) else 'false'
+    }) }}
+    {% for error in form.runner.errors %}
+      <p class="text-sm text-destructive">{{ error }}</p>
+    {% endfor %}
+  </div>
+
+  {# ROOT DIRECTORY #}
+  <div class="space-y-3">
+    {{ form.root_directory.label() }}
+    <div class="relative">
+      {{ form.root_directory(
+        id=False,
+        class="w-full font-mono text-[13px]",
+        pattern="^\.?/?([a-zA-Z0-9_\-]+/?)*$",
+        placeholder="./",
+        **{'x-ref': 'rootDirectoryInput'}
+      ) }}
+    </div>
+    {% for error in form.root_directory.errors %}
+      <p class="text-sm text-destructive">{{ error }}</p>
+    {% endfor %}
+    <p class="text-sm text-muted-foreground">
+      {{ _('Commands will run from this directory.') }}
+    </p>
+  </div>
+
+  {# BUILD COMMAND #}
+  <div class="space-y-3">
+    {{ form.build_command.label() }}
+    <div class="relative">
+      {{ form.build_command(
+        id=False,
+        class="w-full font-mono text-[13px]",
+        **{'x-ref': 'buildCommandInput'}
+      ) }}
+    </div>
+    {% for error in form.build_command.errors %}
+      <p class="text-sm text-destructive">{{ error }}</p>
+    {% endfor %}
+    <p class="text-sm text-muted-foreground">
+      {{ _('Install dependencies and build the project.') }}
+    </p>
+  </div>
+
+  {# PRE-DEPLOY COMMAND #}
+  <div class="space-y-3">
+    {{ form.pre_deploy_command.label() }}
+    <div class="relative">
+      {{ form.pre_deploy_command(
+        id=False,
+        class="w-full font-mono text-[13px]",
+        **{'x-ref': 'preDeployCommandInput'}
+      ) }}
+    </div>
+    {% for error in form.pre_deploy_command.errors %}
+      <p class="text-sm text-destructive">{{ error }}</p>
+    {% endfor %}
+    <p class="text-sm text-muted-foreground">
+      {{ _('Run commands before we start the app (e.g. migrate database).') }}
+    </p>
+  </div>
+
+  {# HTTP EXPOSURE #}
+  <div x-show="allowsRequiresHttpOverride()" x-cloak class="space-y-3">
+    <div class="flex items-start justify-between gap-4 rounded-lg border p-4">
+      <div class="space-y-1">
+        {{ form.requires_http.label(class_="font-medium") }}
+        <p class="text-sm text-muted-foreground">
+          {{ _('Enable this for web apps that should be reachable over HTTP. When enabled, the process must listen on <code>0.0.0.0:8000</code>. Disable it for Telegram bots, workers, and other background processes.') | safe }}
+        </p>
+      </div>
+      {{ form.requires_http(
+        class_="input shrink-0",
+        role="switch",
+        **{
+          'x-ref': 'requiresHttpInput',
+          '@change': 'requiresHttp = event.target.checked'
+        }
+      ) }}
+    </div>
+    {% for error in form.requires_http.errors %}
+      <p class="text-sm text-destructive">{{ error }}</p>
+    {% endfor %}
+  </div>
+
+  {# START COMMAND #}
+  <div class="space-y-3">
+    {{ form.start_command.label() }}
+    <div class="relative">
+      {{ form.start_command(
+        id=False,
+        class="w-full font-mono text-[13px]",
+        **{'x-ref': 'startCommandInput'}
+      ) }}
+    </div>
+    {% for error in form.start_command.errors %}
+      <p class="text-sm text-destructive">{{ error }}</p>
+    {% endfor %}
+    <p x-show="!allowsRequiresHttpOverride() || requiresHttp" x-cloak class="text-sm text-muted-foreground">
+      {{ _('Start the app. Because HTTP is enabled, it must listen on <code>0.0.0.0:8000</code>.') | safe }}
+    </p>
+  </div>
+</div>
+{% endmacro %}

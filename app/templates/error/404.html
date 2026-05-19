@@ -1,0 +1,17 @@
+{% extends "layouts/base.html" %}
+{% from "error/_public.html" import public_error %}
+{% block base_content %}
+  {% if is_panel_host | default(true) %}
+    {{ public_error(
+      _('Page not found'),
+      _('The requested URL was not found (404).'),
+      '/',
+      _('Go to main page'),
+    ) }}
+  {% else %}
+    {{ public_error(
+      _('Page not found'),
+      _('The requested URL was not found (404).'),
+    ) }}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,70 @@
+services:
+  app:
+    labels:
+      - traefik.http.routers.app-http.rule=Host(`${APP_HOSTNAME}`)
+      - traefik.http.routers.app-http.entrypoints=web
+      - traefik.http.routers.app-http.priority=8
+      - traefik.http.routers.app-http.service=noop@internal
+      - traefik.http.routers.app-http.middlewares=pushify-redirect-https@file
+      - traefik.http.routers.app.entrypoints=websecure
+      - traefik.http.routers.app.tls=true
+      - traefik.http.routers.app.tls.certresolver=le
+      - traefik.http.routers.app.tls.domains[0].main=${APP_HOSTNAME}
+      - traefik.http.routers.app.priority=10
+      - traefik.http.routers.app.middlewares=pushify-inflight-panel@file,pushify-ratelimit-panel@file,pushify-headers@file
+
+  phpmyadmin:
+    labels:
+      - traefik.http.routers.phpmyadmin-http.rule=Host(`${PHPMYADMIN_HOSTNAME:-db.${APP_HOSTNAME}}`)
+      - traefik.http.routers.phpmyadmin-http.entrypoints=web
+      - traefik.http.routers.phpmyadmin-http.priority=7
+      - traefik.http.routers.phpmyadmin-http.service=noop@internal
+      - traefik.http.routers.phpmyadmin-http.middlewares=pushify-redirect-https@file
+      - traefik.http.routers.phpmyadmin.entrypoints=websecure
+      - traefik.http.routers.phpmyadmin.tls=true
+      - traefik.http.routers.phpmyadmin.tls.certresolver=le
+      - traefik.http.routers.phpmyadmin.priority=9
+      - traefik.http.routers.phpmyadmin.middlewares=pushify-inflight-panel@file,pushify-ratelimit-panel@file,pushify-headers@file
+
+  traefik:
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.endpoint=tcp://docker-proxy:2375"
+      - "--providers.docker.watch=true"
+      - "--providers.file.directory=/etc/traefik/dynamic_conf"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.middlewares=pushify-edge-guard@file"
+      - "--entrypoints.web.asDefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.http.middlewares=pushify-edge-guard@file"
+      - "--entrypoints.websecure.asDefault=false"
+      - "--global.sendAnonymousUsage=false"
+      - "--global.checkNewVersion=false"
+      - "--api.insecure=false"
+      - "--ping=false"
+    labels:
+      - "traefik.http.routers.deployment-not-found-https.rule=HostRegexp(`^(.+)\\.${DEPLOY_DOMAIN}$`) && !PathPrefix(`/.pushify`) && !PathPrefix(`/errors`)"
+      - "traefik.http.routers.deployment-not-found-https.entrypoints=websecure"
+      - "traefik.http.routers.deployment-not-found-https.tls=true"
+      - "traefik.http.routers.deployment-not-found-https.tls.certresolver=le"
+      - "traefik.http.routers.deployment-not-found-https.priority=1"
+      - "traefik.http.routers.deployment-not-found-https.service=noop@internal"
+      - "traefik.http.routers.deployment-not-found-https.middlewares=deployment-redirect"
+      - "traefik.http.middlewares.deployment-redirect.redirectRegex.replacement=https://$$1/errors/503"
+      - "traefik.http.routers.pushify-deploy-challenge-https.rule=HostRegexp(`^.+\\.${DEPLOY_DOMAIN}$`) && PathPrefix(`/.pushify`)"
+      - "traefik.http.routers.pushify-deploy-challenge-https.entrypoints=websecure"
+      - "traefik.http.routers.pushify-deploy-challenge-https.tls=true"
+      - "traefik.http.routers.pushify-deploy-challenge-https.tls.certresolver=le"
+      - "traefik.http.routers.pushify-deploy-challenge-https.priority=25"
+      - "traefik.http.routers.pushify-deploy-challenge-https.service=pushify-security@file"
+      - "traefik.http.routers.pushify-deploy-errors-https.rule=HostRegexp(`^.+\\.${DEPLOY_DOMAIN}$`) && PathPrefix(`/errors`)"
+      - "traefik.http.routers.pushify-deploy-errors-https.entrypoints=websecure"
+      - "traefik.http.routers.pushify-deploy-errors-https.tls=true"
+      - "traefik.http.routers.pushify-deploy-errors-https.tls.certresolver=le"
+      - "traefik.http.routers.pushify-deploy-errors-https.priority=24"
+      - "traefik.http.routers.pushify-deploy-errors-https.service=pushify-security@file"
